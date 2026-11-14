@@ -256,3 +256,5 @@ tests/test_flask_app.py::test_api_downloads PASSED                       [100%]
 - **Viva Voce Q&A**: [docs/viva_questions.md](file:///d:/Kumar/Sonykaka/SympSort/docs/viva_questions.md)
 - **Project Timeline**: [docs/project_timeline.md](file:///d:/Kumar/Sonykaka/SympSort/docs/project_timeline.md)
 - **Generated 300 DPI Chart**: [outputs/smoker_charges_comparison.png](file:///d:/Kumar/Sonykaka/SympSort/outputs/smoker_charges_comparison.png)
+# SympSort
+A mini project on medical factors and lifestyle.
