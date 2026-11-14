@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ project_name }} — {{ project_title }}</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/favicon.ico') }}" type="image/x-icon">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/desktop.css') }}">
+</head>
+<body>
+  <div class="app">
+    <!-- ─── Sidebar ─── -->
+    <aside class="sidebar" role="navigation" aria-label="Main navigation">
+      <div class="sidebar-brand">
+        <h1 class="sidebar-wordmark">SympSort</h1>
+        <span class="sidebar-subtitle">Medical Cost Analysis</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-view="overview" aria-current="page">
+          <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1"/>
+            <rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/>
+            <rect x="14" y="14" width="7" height="7" rx="1"/>
+          </svg>
+          <span class="nav-label">Overview</span>
+          <kbd class="nav-kbd">1</kbd>
+        </button>
+
+        <button class="nav-item" data-view="comparison">
+          <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10"/>
+            <line x1="12" y1="20" x2="12" y2="4"/>
+            <line x1="6" y1="20" x2="6" y2="14"/>
+          </svg>
+          <span class="nav-label">Cost Comparison</span>
+          <kbd class="nav-kbd">2</kbd>
+        </button>
+
+        <button class="nav-item" data-view="explorer">
+          <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="12" cy="5" rx="9" ry="3"/>
+            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+          </svg>
+          <span class="nav-label">Dataset Explorer</span>
+          <kbd class="nav-kbd">3</kbd>
+        </button>
+
+        <button class="nav-item" data-view="methodology">
+          <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="16 18 22 12 16 6"/>
+            <polyline points="8 6 2 12 8 18"/>
+          </svg>
+          <span class="nav-label">Methodology</span>
+          <kbd class="nav-kbd">4</kbd>
+        </button>
+
+        <button class="nav-item" data-view="about">
+          <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="16" x2="12" y2="12"/>
+            <line x1="12" y1="8" x2="12.01" y2="8"/>
+          </svg>
+          <span class="nav-label">About</span>
+          <kbd class="nav-kbd">5</kbd>
+        </button>
+      </nav>
+
+      <div class="sidebar-status">
+        <span class="status-pill" id="statusPill">
+          <span class="status-dot"></span>
+          <span class="status-text">Checking…</span>
+        </span>
+      </div>
+    </aside>
+
+    <!-- ─── Main ─── -->
+    <main class="main">
+      <!-- Header bar -->
+      <header class="header-bar">
+        <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle navigation">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <h2 class="header-title" id="headerTitle">Overview</h2>
+        <div class="header-actions">
+          <button class="btn-icon" id="themeToggle" aria-label="Toggle theme" title="Toggle theme">☀</button>
+          <button class="btn-text" id="reloadBtn">Reload Data</button>
+          <a class="btn-text" href="/api/download/chart" id="exportChartLink">Export Chart</a>
+          <a class="btn-text" href="/api/download/summary">Download CSV</a>
+        </div>
+      </header>
+
+      <!-- Content area -->
+      <div class="content">
+        <!-- ─── View 1: Overview ─── -->
+        <section class="view active" id="view-overview" aria-label="Overview">
+          <div class="view-inner">
+            <!-- Loading skeleton -->
+            <div class="skeleton-block" id="overviewSkeleton">
+              <div class="skeleton-line skeleton-line--wide"></div>
+              <div class="skeleton-row">
+                <div class="skeleton-card"></div>
+                <div class="skeleton-card"></div>
+              </div>
+              <div class="skeleton-chart"></div>
+            </div>
+
+            <!-- Error state -->
+            <div class="error-state hidden" id="overviewError">
+              <p class="error-message"></p>
+              <button class="btn-text" id="overviewRetry">Retry</button>
+            </div>
+
+            <!-- Actual content (hidden until loaded) -->
+            <div class="overview-content hidden" id="overviewContent">
+              <p class="finding-line" id="findingLine"></p>
+
+              <div class="kpi-row">
+                <div class="kpi">
+                  <span class="kpi-label">Non-Smoker Average</span>
+                  <span class="kpi-value kpi-nonsmoker" id="kpiNonSmoker">—</span>
+                </div>
+                <div class="kpi">
+                  <span class="kpi-label">Smoker Average</span>
+                  <span class="kpi-value kpi-smoker" id="kpiSmoker">—</span>
+                </div>
+              </div>
+
+              <div class="diff-row">
+                <span class="diff-abs" id="diffAbs"></span>
+                <span class="diff-badge" id="diffBadge"></span>
+              </div>
+
+              <figure class="chart-figure">
+                <img class="chart-img" id="heroChart" src="" alt="Bar chart comparing smoker vs non-smoker average insurance charges" loading="lazy">
+                <figcaption class="chart-caption">Average medical insurance charges by smoking status (95% CI error bars)</figcaption>
+              </figure>
+
+              <div class="sample-section">
+                <h3 class="section-heading">Sample Data</h3>
+                <div class="table-scroll">
+                  <table class="data-table sample-table" id="sampleTable">
+                    <thead>
+                      <tr>
+                        <th>Age</th>
+                        <th>Sex</th>
+                        <th class="num">BMI</th>
+                        <th class="num">Children</th>
+                        <th>Smoker</th>
+                        <th>Region</th>
+                        <th class="num">Charges</th>
+                      </tr>
+                    </thead>
+                    <tbody id="sampleBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ─── View 2: Cost Comparison ─── -->
+        <section class="view" id="view-comparison" aria-label="Cost Comparison">
+          <div class="view-inner">
+            <div class="skeleton-block" id="comparisonSkeleton">
+              <div class="skeleton-line skeleton-line--wide"></div>
+              <div class="skeleton-chart"></div>
+            </div>
+
+            <div class="error-state hidden" id="comparisonError">
+              <p class="error-message"></p>
+              <button class="btn-text" id="comparisonRetry">Retry</button>
+            </div>
+
+            <div class="comparison-content hidden" id="comparisonContent">
+              <h3 class="section-heading">Detailed Statistics</h3>
+              <div class="table-scroll">
+                <table class="data-table stats-table" id="statsTable">
+                  <thead>
+                    <tr>
+                      <th>Metric</th>
+                      <th class="num">Non-Smokers</th>
+                      <th class="num">Smokers</th>
+                    </tr>
+                  </thead>
+                  <tbody id="statsBody"></tbody>
+                </table>
+              </div>
+
+              <figure class="chart-figure chart-figure--large">
+                <img class="chart-img" id="comparisonChart" src="" alt="Detailed cost comparison chart" loading="lazy">
+                <figcaption class="chart-caption">Average medical insurance charges by smoking status</figcaption>
+              </figure>
+            </div>
+          </div>
+        </section>
+
+        <!-- ─── View 3: Dataset Explorer ─── -->
+        <section class="view" id="view-explorer" aria-label="Dataset Explorer">
+          <div class="view-inner">
+            <div class="explorer-controls">
+              <div class="control-group">
+                <input type="search" class="search-input" id="explorerSearch" placeholder="Search records…" aria-label="Search records">
+              </div>
+              <div class="control-group">
+                <select class="filter-select" id="smokerFilter" aria-label="Filter by smoker status">
+                  <option value="">All</option>
+                  <option value="no">Non-smokers</option>
+                  <option value="yes">Smokers</option>
+                </select>
+                <select class="filter-select" id="regionFilter" aria-label="Filter by region">
+                  <option value="">All Regions</option>
+                  <option value="northeast">Northeast</option>
+                  <option value="northwest">Northwest</option>
+                  <option value="southeast">Southeast</option>
+                  <option value="southwest">Southwest</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="table-scroll">
+              <table class="data-table explorer-table" id="explorerTable">
+                <thead>
+                  <tr id="explorerHead"></tr>
+                </thead>
+                <tbody id="explorerBody"></tbody>
+              </table>
+            </div>
+
+            <!-- Empty state -->
+            <div class="empty-state hidden" id="explorerEmpty">
+              <p>No records match your filters.</p>
+            </div>
+
+            <div class="explorer-footer">
+              <div class="page-size-group">
+                <label for="pageSize">Show</label>
+                <select class="filter-select filter-select--small" id="pageSize">
+                  <option value="15" selected>15</option>
+                  <option value="25">25</option>
+                  <option value="50">50</option>
+                </select>
+              </div>
+              <span class="showing-text" id="showingText"></span>
+              <div class="pagination" id="pagination"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ─── View 4: Methodology ─── -->
+        <section class="view" id="view-methodology" aria-label="Methodology">
+          <div class="view-inner">
+            <h3 class="section-heading">Analysis Pipeline</h3>
+            <ol class="pipeline-steps">
+              <li><strong>Load</strong> — Read <code>insurance.csv</code> into a Pandas DataFrame</li>
+              <li><strong>Validate</strong> — Ensure required columns (<code>smoker</code>, <code>charges</code>) exist</li>
+              <li><strong>Clean</strong> — Normalize smoker values, coerce charges to float, drop invalid rows</li>
+              <li><strong>GroupBy</strong> — <code>df.groupby('smoker')['charges'].mean()</code></li>
+              <li><strong>Plot</strong> — Generate Seaborn barplot with 95% CI error bars</li>
+            </ol>
+
+            <div class="code-block-wrapper">
+              <div class="code-block-header">
+                <span class="code-block-lang">Python</span>
+                <button class="btn-copy" id="copyCodeBtn" aria-label="Copy code">Copy</button>
+              </div>
+              <pre class="code-block"><code id="methodologyCode">import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Load dataset
+df = pd.read_csv("data/insurance.csv")
+
+# Core analysis
+grouped = df.groupby('smoker')['charges'].mean()
+print(grouped)
+
+# Visualization
+sns.barplot(data=df, x='smoker', y='charges',
+            estimator='mean', errorbar=('ci', 95))
+plt.title("Average Insurance Charges by Smoking Status")
+plt.ylabel("Average Charges ($)")
+plt.xlabel("Smoker")
+plt.tight_layout()
+plt.savefig("outputs/smoker_charges_comparison.png", dpi=300)
+plt.show()</code></pre>
+            </div>
+
+            <div class="groupby-output">
+              <h4 class="section-subheading">Live GroupBy Output</h4>
+              <pre class="output-block" id="groupbyOutput">Loading…</pre>
+            </div>
+          </div>
+        </section>
+
+        <!-- ─── View 5: About ─── -->
+        <section class="view" id="view-about" aria-label="About">
+          <div class="view-inner">
+            <h3 class="section-heading">About This Project</h3>
+
+            <div class="about-card">
+              <h4 class="section-subheading">Course Information</h4>
+              <dl class="about-dl">
+                <dt>Course</dt>
+                <dd>{{ course_name }} ({{ course_code }})</dd>
+                <dt>Project</dt>
+                <dd>{{ project_title }}</dd>
+                <dt>Problem Statement</dt>
+                <dd>{{ problem_statement }}</dd>
+              </dl>
+            </div>
+
+            <div class="about-card">
+              <h4 class="section-subheading">Dataset</h4>
+              <p>
+                <a href="{{ dataset_source_url }}" target="_blank" rel="noopener noreferrer">{{ dataset_source_name }}</a>
+                — 1,338 records of individual medical insurance charges with demographic and lifestyle features.
+              </p>
+            </div>
+
+            <div class="about-card">
+              <h4 class="section-subheading">Limitations</h4>
+              <ul class="limitations-list">
+                <li><strong>Observational data</strong> — This is a cross-sectional observational dataset. Subjects were not randomly assigned to smoking/non-smoking groups.</li>
+                <li><strong>Correlation ≠ Causation</strong> — The difference in charges between smokers and non-smokers does not prove that smoking <em>causes</em> higher charges. Confounders (age, BMI, region) may contribute.</li>
+                <li><strong>Unbalanced groups</strong> — Non-smokers (n ≈ 1,064) vastly outnumber smokers (n ≈ 274), which affects statistical power and confidence interval widths.</li>
+                <li><strong>Single source</strong> — Results may not generalize beyond this particular dataset or insurance market.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Toast container -->
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
