@@ -14,10 +14,12 @@ import logging
 import math
 import os
 from pathlib import Path
+import tempfile
 from typing import Any, Optional
 
-# Ensure Matplotlib config directory is writable in serverless environments (Vercel/AWS Lambda)
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/.matplotlib")
+# Ensure Matplotlib config directory is writable across all OS & serverless environments
+mpl_dir = os.path.join(tempfile.gettempdir(), ".matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", mpl_dir)
 
 import pandas as pd
 from flask import (
@@ -39,10 +41,11 @@ logger = logging.getLogger(__name__)
 
 def create_app() -> Flask:
     """Create and configure the Flask application."""
+    base_dir = Path(__file__).resolve().parent
     app = Flask(
         __name__,
-        template_folder="templates",
-        static_folder="static",
+        template_folder=str(base_dir / "templates"),
+        static_folder=str(base_dir / "static"),
     )
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
@@ -88,10 +91,11 @@ def create_app() -> Flask:
 
         if report.is_valid and df_valid is not None and not df_valid.empty:
             analysis = calculate_smoker_charges(df_valid)
-            try:
-                save_default_chart(df_valid)
-            except Exception as exc:
-                logger.warning("Could not pre-save default chart: %s", exc)
+            if not os.environ.get("VERCEL"):
+                try:
+                    save_default_chart(df_valid)
+                except Exception as exc:
+                    logger.warning("Could not pre-save default chart: %s", exc)
         else:
             analysis = SmokerAnalysisResult()
             df_valid = pd.DataFrame()

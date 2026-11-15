@@ -22,10 +22,12 @@ import io
 import logging
 import os
 from pathlib import Path
+import tempfile
 from typing import Optional, Union
 
-# Ensure Matplotlib config directory is writable in serverless environments (Vercel/AWS Lambda)
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/.matplotlib")
+# Ensure Matplotlib config directory is writable across all OS & serverless environments
+mpl_dir = os.path.join(tempfile.gettempdir(), ".matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", mpl_dir)
 
 import matplotlib
 matplotlib.use("Agg")  # Non-interactive backend — must precede pyplot import
