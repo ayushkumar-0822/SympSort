@@ -6,6 +6,7 @@ All project-wide constants, paths, column names, color palettes, and chart
 settings live here so that every other module imports from one place.
 """
 
+import os
 from pathlib import Path
 
 # ── Project metadata ──────────────────────────────────────────────────────────
@@ -34,7 +35,7 @@ DATASET_SOURCE_URL: str = (
 _PROJECT_ROOT: Path = Path(__file__).parent
 DEFAULT_DATA_PATH: Path = _PROJECT_ROOT / "data" / "insurance.csv"
 SAMPLE_DATA_PATH: Path = _PROJECT_ROOT / "data" / "insurance_sample.csv"
-OUTPUT_DIR: Path = _PROJECT_ROOT / "outputs"
+OUTPUT_DIR: Path = Path("/tmp/outputs") if os.environ.get("VERCEL") else _PROJECT_ROOT / "outputs"
 
 # ── Dataset column names ─────────────────────────────────────────────────────
 COLUMN_AGE: str = "age"

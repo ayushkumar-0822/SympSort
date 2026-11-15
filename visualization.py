@@ -20,8 +20,12 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 from pathlib import Path
 from typing import Optional, Union
+
+# Ensure Matplotlib config directory is writable in serverless environments (Vercel/AWS Lambda)
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/.matplotlib")
 
 import matplotlib
 matplotlib.use("Agg")  # Non-interactive backend — must precede pyplot import

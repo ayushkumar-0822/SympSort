@@ -12,8 +12,12 @@ import csv
 import io
 import logging
 import math
+import os
 from pathlib import Path
 from typing import Any, Optional
+
+# Ensure Matplotlib config directory is writable in serverless environments (Vercel/AWS Lambda)
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/.matplotlib")
 
 import pandas as pd
 from flask import (

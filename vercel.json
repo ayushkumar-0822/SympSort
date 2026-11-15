@@ -1,0 +1,5 @@
+{
+  "env": {
+    "MPLCONFIGDIR": "/tmp/.matplotlib"
+  }
+}
