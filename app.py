@@ -111,6 +111,8 @@ def create_app() -> Flask:
     # ── Page routes ───────────────────────────────────────────────────────
 
     @app.route("/")
+    @app.route("/api/index")
+    @app.route("/api")
     def index():
         """Serve the single-page application shell."""
         df, analysis, report = get_data()

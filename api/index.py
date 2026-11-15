@@ -16,7 +16,13 @@ os.environ.setdefault("MPLCONFIGDIR", mpl_dir)
 
 from app import create_app
 
-# WSGI application instance for Vercel
-app = create_app()
-application = app
+flask_app = create_app()
 
+def app(environ, start_response):
+    """Normalize Vercel rewrite paths before dispatching to Flask."""
+    path = environ.get("PATH_INFO", "")
+    if path in ("/api/index", "/api/index.py", "/api", ""):
+        environ["PATH_INFO"] = "/"
+    return flask_app(environ, start_response)
+
+application = app
