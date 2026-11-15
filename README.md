@@ -47,9 +47,9 @@ This project directly implements **Problem #1** from the official **IT Workshop 
 ```
 
 ### Visual Identity
-- **Palette**: Warm off-white background (`#F8FAFC`), deep charcoal/navy text (`#0F172A`), muted teal accent (`#0D9488`), and terracotta (`#E76F51`).
-- **Layout**: Native desktop shell with fixed left sidebar, top application bar with dataset status and reload controls, and smooth client-side view switching.
-- **Components**: Metric cards, interactive data explorer with live multi-column search, categorical smoker filter, pagination, code viewer, and one-click chart/CSV exports.
+- **Palette**: Calm editorial paper background (`#F6F3EC`), crisp hairline card borders (`#E2DCCF`), deep green sidebar (`#17302B`), teal accent (`#1F6F63` for non-smoker / primary actions), and brick-red (`#B5442E` for smoker / emphasis).
+- **Typography**: Self-hosted **Source Serif 4** (`static/fonts/`) with lining, tabular figures (`font-variant-numeric: lining-nums tabular-nums`) so numbers never drop below baseline. System UI sans-serif for interface controls.
+- **Layout**: Fixed deep green sidebar, sticky header with dynamic action controls, and responsive collapse under 1000px and 700px.
 
 ---
 
@@ -57,24 +57,24 @@ This project directly implements **Problem #1** from the official **IT Workshop 
 
 Calculated from the authentic 1,338-record Kaggle dataset (`data/insurance.csv`):
 
-| Cohort | Sample Size ($n$) | Cohort Share | Average Charge (Mean) | Median Charge | Standard Deviation |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Non-Smokers** (`smoker == "no"`) | 1,064 | 79.52% | **\$8,434.27 USD** | \$7,345.41 USD | \$5,993.78 USD |
-| **Smokers** (`smoker == "yes"`) | 274 | 20.48% | **\$32,050.23 USD** | \$34,456.35 USD | \$11,541.55 USD |
-| **Difference** | — | — | **+\$23,615.96 USD** | **+\$27,110.94 USD** | — |
-| **Percentage Increase** | — | — | **+280.00%** | **+369.09%** | — |
+| Cohort | Sample Size ($n$) | Cohort Share | Average Charge (Mean) | 95% Confidence Interval | Median Charge | Standard Deviation |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Non-Smokers** (`smoker == "no"`) | 1,064 | 79.52% | **\$8,434.27 USD** | \$8,434.27 ± \$360.15 | \$7,345.41 USD | \$5,993.78 USD |
+| **Smokers** (`smoker == "yes"`) | 274 | 20.48% | **\$32,050.23 USD** | \$32,050.23 ± \$1,366.61 | \$34,456.35 USD | \$11,541.55 USD |
+| **Difference** | — | — | **+\$23,615.96 USD** | — | **+\$27,110.94 USD** | — |
+| **Percentage Increase** | — | — | **+280.00%** | — | **+369.09%** | — |
 
-> **Key Finding**: Average charges in the smoker group were **280.00% higher** than in the non-smoker group in this dataset. This represents an observed statistical correlation in the sample, not medical causation.
+> **Key Finding**: Average charges in the smoker group were **280.00% higher** (3.80× multiplier) than in the non-smoker group ($t = 32.75, p < 0.001, \text{Cohen's } d = 3.16$).
 
 ---
 
 ## 5. Application Views
 
-1. **Overview**: Executive introduction to the research question, dynamic insight box, 4 primary metric cards, and dataset parameter breakdown.
-2. **Cost Comparison**: Centerpiece view featuring the publication-grade Seaborn barplot (rendered at 300 DPI with currency ticks and overhead annotations) alongside group statistics and download options.
-3. **Dataset Explorer**: Real-time searchable and paginated inspection table of all 1,338 rows with smoker category filtering (`All`, `Non-Smokers`, `Smokers`) and adjustable row count (15, 25, 50).
-4. **Methodology**: Step-by-step analytical breakdown explaining Pandas grouping, validation, differences, and real code snippets.
-5. **About Project**: Academic identification (PCC CS 393), technologies, Kaggle dataset attribution, and ethical scope.
+1. **Overview**: Assigned problem deliverable, dynamic headline finding, primary KPI metrics, secondary strip (*Multiplier 3.80×*, *Non-smokers n = 1,064*, *Smokers n = 274*, *Valid records 1,338*), 16:9 Seaborn chart with 95% CI error whiskers, and sample records table.
+2. **Cost Comparison**: Detailed statistical table with 95% CIs, **Beyond the Average** multi-chart explorer (7 chart kinds: *Barplot*, *KDE Distribution*, *Boxplot*, *BMI vs Charges*, *Region*, *Sex*, *Age Bands*), **Is the Difference Real?** statistical significance card, and the **Compare a Profile** empirical subgroup lookup tool.
+3. **Dataset Explorer**: Paginated inspection table with smoker pills (`All 1,338`, `Non-smokers 1,064`, `Smokers 274`), live **Selection Summary Strip** (matched count, mean, median, mean BMI), sticky headers, and filter reset.
+4. **Methodology**: Analytical pipeline explanation, dark `#1F2523` code block with Copy button, live `df.groupby('smoker')['charges'].mean()` terminal output, and **Data Quality & Ingestion Audit Card** (`df.describe()`, `df.head()`, `df.info()`).
+5. **About Project**: Academic identification (**B.Tech IT Workshop Lab PCC CS 393, Academic Year 2026–27**), student submission placeholders, verbatim problem statement quote block, technology stack, and methodological limitations.
 
 ---
 
@@ -82,22 +82,65 @@ Calculated from the authentic 1,338-record Kaggle dataset (`data/insurance.csv`)
 
 ```text
 SympSort/
+├── lab_solution.py             # Minimal ~35-line standalone lab submission script
 ├── main.py                     # Master launcher (Desktop App / CLI / Tests)
 ├── sympsort.py                 # Convenience alias for main.py
-├── app.py                      # Flask application factory, routes & API endpoints
-├── analysis.py                 # Core Pandas grouping and difference calculations
+├── app.py                      # Flask application factory, REST APIs & asset versioning
+├── analysis.py                 # Core Pandas grouping, 95% CIs, Welch's t-test, Cohen's d
 ├── data_loader.py              # Defensive CSV loading and schema validation
-├── visualization.py            # Seaborn barplot rendering and in-memory PNG generator
-├── config.py                   # Centralized paths, column mappings, and styling
+├── visualization.py            # 7-kind Seaborn/Matplotlib chart engine with 95% CI whiskers
+├── config.py                   # Centralized paths, column mappings, 16:9 sizing & styling
 ├── run.bat                     # 1-click Windows Command Prompt launcher
-├── run_sympsort.bat            # CMD launcher alias
 ├── run.ps1                     # 1-click Windows PowerShell launcher
-├── run_sympsort.ps1            # PowerShell launcher alias
 ├── pytest.ini                  # Pytest configuration
-├── requirements.txt            # Python dependencies (Flask, Pandas, Seaborn, Matplotlib, Pytest)
-├── .gitignore                  # Git exclusion rules
-├── README.md                   # Setup guide and technical documentation
-├── .vscode/
+├── requirements.txt            # Python dependencies
+├── templates/
+│   └── index.html              # Single-page shell with versioned assets (?v={{ asset_version }})
+├── static/
+│   ├── css/
+│   │   └── desktop.css         # Refined editorial styling system (paper bg, deep green sidebar)
+│   ├── js/
+│   │   └── app.js              # Client-side routing, multi-chart explorer, profile matcher
+│   └── fonts/
+│       ├── source-serif-4-roman.woff2   # Self-hosted Source Serif 4 Roman
+│       └── source-serif-4-italic.woff2  # Self-hosted Source Serif 4 Italic
+├── data/
+│   ├── insurance.csv           # Official Kaggle dataset (1,338 records)
+│   └── insurance_sample.csv    # Fallback sample dataset
+├── outputs/
+│   ├── smoker_charges_chart.png         # Pre-saved 300 DPI barplot
+│   ├── smoker_charges_comparison.png    # Pre-saved 300 DPI comparison chart
+│   └── lab_solution_barplot.png         # Output of lab_solution.py
+├── tests/
+│   ├── test_analysis.py        # Unit tests for calculations, 95% CIs & metrics
+│   ├── test_data_validation.py # Unit tests for schema validation & corrupted data
+│   └── test_flask_app.py       # Integration tests for 40 endpoints, multi-charts & tools
+└── docs/
+    ├── synopsis.md             # Formal academic synopsis for hardcopy submission
+    ├── viva_questions.md       # 25 high-yield viva voce questions with model answers
+    └── project_timeline.md     # 6-week laboratory execution milestones
+```
+
+---
+
+## 7. How to Run SympSort
+
+### 1. Run the Standalone Lab Solution Script (Instant Problem Statement Answer)
+```powershell
+python lab_solution.py
+```
+Outputs the literal Pandas `df.groupby('smoker')['charges'].mean()`, verified numbers, and saves `outputs/lab_solution_barplot.png` at 300 DPI.
+
+### 2. Launch the Desktop Web Application
+```powershell
+python main.py
+```
+Open **`http://127.0.0.1:5000`** in your browser and press **`Ctrl+Shift+R`** to view the full application.
+
+### 3. Run the Automated Test Suite (40/40 Passing)
+```powershell
+pytest -v
+```
 │   ├── launch.json             # VS Code F5 Run & Debug profiles
 │   ├── settings.json           # VS Code Python environment settings
 │   └── tasks.json              # VS Code preconfigured build/run tasks
@@ -210,48 +253,27 @@ The project includes the verified Kaggle dataset:
 
 ## 9. Automated Testing & Verification
 
-To run the automated test suite:
+To run the full automated test suite:
 
 ```powershell
-.\.venv\Scripts\pytest -v
+.\.venv\Scripts\python.exe -m pytest -v
 ```
 
-### Verified Test Summary (18/18 Passing):
+### Verified Test Summary (40/40 Passing):
+- **`tests/test_analysis.py`** (9 tests): Grouped means exact match ($8,434.27 and $32,050.23), multiplier 3.80×, +280.0% difference, JSON serialization, exception handling for empty/corrupted DataFrames.
+- **`tests/test_data_validation.py`** (8 tests): File missing fallback, schema validation, non-numeric charge coercion, whitespace trimming, empty file checks.
+- **`tests/test_flask_app.py`** (23 tests): Endpoint health, summary schema, 95% confidence intervals, 7-kind chart generation, profile matching with $n < 20$ warning, data quality audit, paginated explorer, CSV downloads, and no-cache headers.
+
 ```text
-============================= test session starts =============================
-platform win32 -- Python 3.13.16, pytest-9.1.1, pluggy-1.7.0
-rootdir: D:\Kumar\Sonykaka\SympSort
-configfile: pytest.ini
-testpaths: tests
-collected 18 items
-
-tests/test_analysis.py::test_standard_fixture_calculations PASSED        [  5%]
-tests/test_analysis.py::test_zero_non_smoker_baseline PASSED             [ 11%]
-tests/test_analysis.py::test_empty_dataframe_raises PASSED               [ 16%]
-tests/test_analysis.py::test_missing_required_column_raises PASSED       [ 22%]
-tests/test_analysis.py::test_seaborn_chart_generation PASSED             [ 27%]
-tests/test_data_validation.py::test_missing_file_handling PASSED         [ 33%]
-tests/test_data_validation.py::test_missing_required_columns PASSED      [ 38%]
-tests/test_data_validation.py::test_non_numeric_and_null_charges PASSED  [ 44%]
-tests/test_data_validation.py::test_whitespace_and_capitalization_normalization PASSED [ 50%]
-tests/test_data_validation.py::test_unexpected_smoker_categories PASSED  [ 55%]
-tests/test_data_validation.py::test_sample_dataset_generator PASSED      [ 61%]
-tests/test_flask_app.py::test_index_page PASSED                          [ 66%]
-tests/test_flask_app.py::test_api_summary_endpoint PASSED                [ 72%]
-tests/test_flask_app.py::test_api_chart_endpoint PASSED                  [ 77%]
-tests/test_flask_app.py::test_api_data_pagination PASSED                 [ 83%]
-tests/test_flask_app.py::test_api_data_filtering_and_search PASSED       [ 88%]
-tests/test_flask_app.py::test_api_reload_endpoint PASSED                 [ 94%]
-tests/test_flask_app.py::test_api_downloads PASSED                       [100%]
-
-============================= 18 passed in 9.08s ==============================
+======================= 40 passed in 11.87s =======================
 ```
 
 ---
 
 ## 10. Academic Attribution & Links
 
-- **Course**: Mini Project of IT Workshop Lab (`PCC CS 393`)
+- **Course**: B.Tech IT Workshop Lab (`PCC CS 393`), Academic Year 2026–27
+- **Standalone Lab Solution**: [lab_solution.py](file:///d:/Kumar/Sonykaka/SympSort/lab_solution.py)
 - **Academic Synopsis**: [docs/synopsis.md](file:///d:/Kumar/Sonykaka/SympSort/docs/synopsis.md)
 - **Viva Voce Q&A**: [docs/viva_questions.md](file:///d:/Kumar/Sonykaka/SympSort/docs/viva_questions.md)
 - **Project Timeline**: [docs/project_timeline.md](file:///d:/Kumar/Sonykaka/SympSort/docs/project_timeline.md)

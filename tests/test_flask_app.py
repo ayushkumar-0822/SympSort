@@ -217,3 +217,131 @@ def test_chart_dark_theme(client):
     assert response.status_code == 200
     assert response.content_type.startswith("image/png")
     assert response.data[:4] == b"\x89PNG"
+
+
+# ── 14. GET /api/sample-data returns formatted sample records ─────────────
+
+def test_sample_data_endpoint(client):
+    """GET /api/sample-data should return sample records with count."""
+    response = client.get("/api/sample-data?limit=5")
+    assert response.status_code == 200
+
+    data = response.get_json()
+    assert data["status"] == "success"
+    assert "records" in data
+    assert len(data["records"]) <= 5
+    assert len(data["records"]) > 0
+
+
+# ── 15. GET /export-csv alias works ───────────────────────────────────────
+
+def test_export_csv_alias(client):
+    """GET /export-csv should return the summary CSV download."""
+    response = client.get("/export-csv")
+    assert response.status_code == 200
+    assert "text/csv" in response.content_type
+    assert b"metric,value" in response.data
+
+
+# ── 16. GET /api/summary includes 95% Confidence Interval fields ──────────
+
+def test_summary_includes_confidence_intervals(client):
+    """Summary JSON must include 95% CI metrics for both cohorts."""
+    response = client.get("/api/summary")
+    assert response.status_code == 200
+    data = response.get_json()
+
+    assert "non_smoker_ci_margin" in data
+    assert "smoker_ci_margin" in data
+    assert data["non_smoker_ci_margin"] > 0
+    assert data["smoker_ci_margin"] > 0
+    assert data["non_smoker_ci_low"] < data["non_smoker_mean"] < data["non_smoker_ci_high"]
+    assert data["smoker_ci_low"] < data["smoker_mean"] < data["smoker_ci_high"]
+
+
+# ── 17. GET /api/download/filtered returns filtered CSV data ──────────────
+
+def test_download_filtered_csv(client):
+    """Filtered CSV download should filter rows based on query params."""
+    response = client.get("/api/download/filtered?smoker=yes")
+    assert response.status_code == 200
+    assert "text/csv" in response.content_type
+    assert "sympsort_filtered_records.csv" in response.headers.get("Content-Disposition", "")
+    lines = response.data.decode("utf-8").strip().splitlines()
+    assert len(lines) == 275  # 1 header + 274 smoker rows
+
+
+# ── 18. GET /api/chart multi-kind visual exploration endpoints ────────────
+
+def test_chart_multi_kinds(client):
+    """All 7 supported chart types must return valid PNG images."""
+    kinds = ["bar", "dist", "box", "scatter", "region", "sex", "age"]
+    for kind in kinds:
+        response = client.get(f"/api/chart?kind={kind}")
+        assert response.status_code == 200, f"Chart {kind} failed with status {response.status_code}"
+        assert response.content_type.startswith("image/png")
+        assert response.data[:4] == b"\x89PNG"
+
+
+def test_chart_invalid_kind_fallback(client):
+    """Invalid chart kind should fallback gracefully to default bar chart."""
+    response = client.get("/api/chart?kind=non_existent_kind")
+    assert response.status_code == 200
+    assert response.content_type.startswith("image/png")
+    assert response.data[:4] == b"\x89PNG"
+
+
+# ── 19. GET /api/profile-match empirical lookup endpoint ──────────────────
+
+def test_profile_match_endpoint(client):
+    """Profile matcher should filter by age band and smoker status."""
+    response = client.get("/api/profile-match?age_band=18-29&smoker=yes")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["status"] == "success"
+    assert data["count"] > 0
+    assert data["mean"] > 0
+    assert data["median"] > 0
+    assert data["min"] <= data["mean"] <= data["max"]
+
+
+def test_profile_match_small_sample_warning(client):
+    """Subgroups with n < 20 must return a visible sample size warning."""
+    response = client.get("/api/profile-match?age_band=18-29&bmi_band=<25&smoker=yes")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["status"] == "success"
+    if 0 < data["count"] < 20:
+        assert data["warning"] is not None
+        assert "small" in data["warning"].lower() or "n < 20" in data["warning"]
+
+
+# ── 20. GET /api/data-quality methodology audit endpoint ──────────────────
+
+def test_data_quality_endpoint(client):
+    """Data quality endpoint returns validation summary, columns, describe, and head."""
+    response = client.get("/api/data-quality")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["status"] == "success"
+    assert "validation" in data
+    assert "columns" in data
+    assert "describe" in data
+    assert "head" in data
+    assert len(data["head"]) <= 5
+    assert data["validation"]["valid_rows"] == 1338
+
+
+# ── 21. GET /api/data returns selection_summary ───────────────────────────
+
+def test_data_selection_summary(client):
+    """GET /api/data must return a selection_summary of the filtered dataset."""
+    response = client.get("/api/data?smoker=yes")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert "selection_summary" in data
+    summary = data["selection_summary"]
+    assert summary["matched_count"] == 274
+    assert summary["mean_charges"] == 32050.23
+    assert summary["median_charges"] == 34456.35
+    assert summary["mean_bmi"] > 0

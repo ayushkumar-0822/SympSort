@@ -11,8 +11,14 @@ from pathlib import Path
 # ── Project metadata ──────────────────────────────────────────────────────────
 PROJECT_NAME: str = "SympSort"
 PROJECT_TITLE: str = "Medical Cost & Lifestyle Factors"
-COURSE_NAME: str = "Python for Data Science"
+COURSE_NAME: str = "B.Tech IT Workshop Lab (PCC CS 393), Academic Year 2026–27"
 COURSE_CODE: str = "PCC CS 393"
+ACADEMIC_YEAR: str = "2026–27"
+
+ASSIGNED_PROBLEM_STATEMENT: str = (
+    "Find the average insurance charge for smokers vs. non-smokers using Pandas. "
+    "Create a Seaborn barplot to visually compare the average costs between the two groups."
+)
 
 PROBLEM_STATEMENT: str = (
     "Analyze and visualize the relationship between smoking status and "
@@ -82,8 +88,8 @@ CHART_AXIS_DARK: str = "#444444"
 # ── Chart settings ────────────────────────────────────────────────────────────
 CHART_DPI_SCREEN: int = 150
 CHART_DPI_DOWNLOAD: int = 300
-CHART_WIDTH: float = 8.0
-CHART_HEIGHT: float = 5.0
+CHART_WIDTH: float = 9.6
+CHART_HEIGHT: float = 5.4
 
 # ── Flask defaults ────────────────────────────────────────────────────────────
 DEFAULT_PORT: int = 5000

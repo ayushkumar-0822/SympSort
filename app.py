@@ -28,7 +28,7 @@ from flask import (
 import config
 from analysis import SmokerAnalysisResult, calculate_smoker_charges
 from data_loader import ValidationReport, load_dataset
-from visualization import generate_chart_bytes, save_default_chart
+from visualization import clear_chart_cache, generate_chart_bytes, save_default_chart
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,29 @@ def create_app() -> Flask:
         template_folder="templates",
         static_folder="static",
     )
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+
+    def get_asset_version() -> str:
+        """Return timestamp of newest static asset to guarantee cache-busting."""
+        try:
+            static_dir = Path(__file__).parent / "static"
+            css_mtime = (static_dir / "css" / "desktop.css").stat().st_mtime
+            js_mtime = (static_dir / "js" / "app.js").stat().st_mtime
+            return str(int(max(css_mtime, js_mtime)))
+        except Exception:
+            return "2.1"
+
+    @app.context_processor
+    def inject_asset_version():
+        return {"asset_version": get_asset_version()}
+
+    @app.after_request
+    def add_no_cache_headers(response):
+        if "Cache-Control" not in response.headers:
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
 
     # ── Application-level cache ───────────────────────────────────────────
     _cache: dict[str, Any] = {
@@ -62,7 +85,7 @@ def create_app() -> Flask:
         if report.is_valid and df_valid is not None and not df_valid.empty:
             analysis = calculate_smoker_charges(df_valid)
             try:
-                save_default_chart(analysis.df_grouped)
+                save_default_chart(df_valid)
             except Exception as exc:
                 logger.warning("Could not pre-save default chart: %s", exc)
         else:
@@ -89,6 +112,10 @@ def create_app() -> Flask:
             project_title=config.PROJECT_TITLE,
             course_name=config.COURSE_NAME,
             course_code=config.COURSE_CODE,
+            academic_year=getattr(config, "ACADEMIC_YEAR", "2026–27"),
+            assigned_problem_statement=getattr(
+                config, "ASSIGNED_PROBLEM_STATEMENT", config.PROBLEM_STATEMENT
+            ),
             problem_statement=config.PROBLEM_STATEMENT,
             dataset_source_url=config.DATASET_SOURCE_URL,
             dataset_source_name=getattr(config, "DATASET_SOURCE_NAME", "Medical Cost Personal Datasets (Kaggle)"),
@@ -133,20 +160,22 @@ def create_app() -> Flask:
 
     @app.route("/api/chart")
     def api_chart():
-        """Return chart PNG. ``?theme=dark`` for dark-mode variant."""
-        _df, analysis, _report = get_data()
-        if analysis.df_grouped is None:
+        """Return chart PNG. ``?theme=dark`` for dark-mode variant. ``?kind=bar|dist|box|scatter|region|sex|age``."""
+        df, analysis, _report = get_data()
+        chart_data = df if (df is not None and not df.empty) else analysis.df_grouped
+        if chart_data is None:
             return jsonify({"error": "No data available"}), 500
 
         theme = request.args.get("theme", "light").strip().lower()
+        kind = request.args.get("kind", "bar").strip().lower()
         dark_mode = theme == "dark"
         png_bytes = generate_chart_bytes(
-            analysis.df_grouped, dark_mode=dark_mode, high_res=False
+            chart_data, kind=kind, dark_mode=dark_mode, high_res=False
         )
         return send_file(
             io.BytesIO(png_bytes),
             mimetype="image/png",
-            download_name="chart.png",
+            download_name=f"chart_{kind}.png",
         )
 
     @app.route("/api/data")
@@ -186,20 +215,45 @@ def create_app() -> Flask:
         # Convert to list[dict], replacing NaN with None for JSON
         records = _df_to_records(page_df)
 
+        selection_summary = {
+            "matched_count": total_filtered,
+            "mean_charges": round(float(filtered[config.COLUMN_CHARGES].mean()), 2) if total_filtered > 0 else 0.0,
+            "median_charges": round(float(filtered[config.COLUMN_CHARGES].median()), 2) if total_filtered > 0 else 0.0,
+            "mean_bmi": round(float(filtered[config.COLUMN_BMI].mean()), 2) if (total_filtered > 0 and config.COLUMN_BMI in filtered.columns) else 0.0,
+        }
+
         return jsonify({
             "records": records,
             "total_records": len(df),
             "total_unfiltered": len(df),
             "total_filtered": total_filtered,
+            "selection_summary": selection_summary,
             "page": page,
             "pages": total_pages,
             "total_pages": total_pages,
             "page_size": page_size,
         })
 
+    @app.route("/api/sample-data")
+    def api_sample_data():
+        """Return sample records for initial preview tables."""
+        df, _analysis, _report = get_data()
+        try:
+            limit = min(50, max(1, int(request.args.get("limit", 5))))
+        except (ValueError, TypeError):
+            limit = 5
+        sample_df = df.head(limit)
+        return jsonify({
+            "status": "success",
+            "count": len(sample_df),
+            "total_records": len(df),
+            "records": _df_to_records(sample_df),
+        })
+
     @app.route("/api/reload", methods=["POST"])
     def api_reload():
         """Force-reload the dataset from disk."""
+        clear_chart_cache()
         df, _analysis, report = get_data(force_reload=True)
         return jsonify({
             "status": "success",
@@ -213,20 +267,154 @@ def create_app() -> Flask:
     @app.route("/api/download/chart")
     def api_download_chart():
         """Download high-resolution (300 DPI) chart."""
-        _df, analysis, _report = get_data()
-        if analysis.df_grouped is None:
+        df, analysis, _report = get_data()
+        chart_data = df if (df is not None and not df.empty) else analysis.df_grouped
+        if chart_data is None:
             return jsonify({"error": "No data available"}), 500
 
+        kind = request.args.get("kind", "bar").strip().lower()
         png_bytes = generate_chart_bytes(
-            analysis.df_grouped, dark_mode=False, high_res=True
+            chart_data, kind=kind, dark_mode=False, high_res=True
         )
         return send_file(
             io.BytesIO(png_bytes),
             mimetype="image/png",
             as_attachment=True,
-            download_name="sympsort_smoker_charges.png",
+            download_name=f"sympsort_{kind}_chart.png",
         )
 
+    @app.route("/api/profile-match")
+    def api_profile_match():
+        """Empirical profile matcher: filter records by profile criteria."""
+        df, _analysis, _report = get_data()
+        if df is None or df.empty:
+            return jsonify({"status": "error", "message": "No data available"}), 500
+
+        matched = df.copy()
+
+        # Age band filter
+        age_band = request.args.get("age_band", "all").strip().lower()
+        if age_band == "18-29":
+            matched = matched[(matched[config.COLUMN_AGE] >= 18) & (matched[config.COLUMN_AGE] <= 29)]
+        elif age_band == "30-44":
+            matched = matched[(matched[config.COLUMN_AGE] >= 30) & (matched[config.COLUMN_AGE] <= 44)]
+        elif age_band == "45-64":
+            matched = matched[(matched[config.COLUMN_AGE] >= 45) & (matched[config.COLUMN_AGE] <= 64)]
+
+        # BMI band filter
+        bmi_band = request.args.get("bmi_band", "all").strip().lower()
+        if bmi_band in ("<25", "normal"):
+            matched = matched[matched[config.COLUMN_BMI] < 25.0]
+        elif bmi_band in ("25-29.9", "overweight"):
+            matched = matched[(matched[config.COLUMN_BMI] >= 25.0) & (matched[config.COLUMN_BMI] < 30.0)]
+        elif bmi_band in (">=30", "obese"):
+            matched = matched[matched[config.COLUMN_BMI] >= 30.0]
+
+        # Sex filter
+        sex = request.args.get("sex", "all").strip().lower()
+        if sex in ("male", "female"):
+            matched = matched[matched[config.COLUMN_SEX] == sex]
+
+        # Region filter
+        region = request.args.get("region", "all").strip().lower()
+        if region in config.VALID_REGIONS:
+            matched = matched[matched[config.COLUMN_REGION] == region]
+
+        # Smoker filter
+        smoker = request.args.get("smoker", "all").strip().lower()
+        if smoker in config.VALID_SMOKER_VALUES:
+            matched = matched[matched[config.COLUMN_SMOKER] == smoker]
+
+        count = len(matched)
+        if count == 0:
+            return jsonify({
+                "status": "success",
+                "count": 0,
+                "mean": 0.0,
+                "median": 0.0,
+                "min": 0.0,
+                "max": 0.0,
+                "warning": "No matching records found in dataset for this profile.",
+            })
+
+        mean_val = round(float(matched[config.COLUMN_CHARGES].mean()), 2)
+        med_val = round(float(matched[config.COLUMN_CHARGES].median()), 2)
+        min_val = round(float(matched[config.COLUMN_CHARGES].min()), 2)
+        max_val = round(float(matched[config.COLUMN_CHARGES].max()), 2)
+
+        warning = (
+            f"Small sample size (n = {count} < 20). Empirical estimates have higher statistical variance."
+            if count < 20
+            else None
+        )
+
+        return jsonify({
+            "status": "success",
+            "count": count,
+            "mean": mean_val,
+            "median": med_val,
+            "min": min_val,
+            "max": max_val,
+            "warning": warning,
+        })
+
+    @app.route("/api/data-quality")
+    def api_data_quality():
+        """Data quality report and inspection data for methodology view."""
+        df, _analysis, report = get_data()
+        num_cols = [c for c in [config.COLUMN_AGE, config.COLUMN_BMI, config.COLUMN_CHILDREN, config.COLUMN_CHARGES] if c in df.columns]
+        desc_dict = df[num_cols].describe().round(2).to_dict() if not df.empty else {}
+
+        info_list = []
+        for col in df.columns:
+            info_list.append({
+                "column": col,
+                "dtype": str(df[col].dtype),
+                "non_null_count": int(df[col].notna().sum()),
+                "null_count": int(df[col].isna().sum()),
+            })
+
+        return jsonify({
+            "status": "success",
+            "validation": {
+                "is_valid": report.is_valid,
+                "file_path": report.file_path,
+                "total_raw_rows": report.total_raw_rows,
+                "valid_rows": report.valid_rows,
+                "excluded_rows": report.excluded_rows,
+                "null_charges_count": report.null_charges_count,
+                "invalid_smoker_count": report.invalid_smoker_count,
+                "used_sample": report.used_sample,
+                "warnings": report.warnings,
+            },
+            "columns": info_list,
+            "describe": desc_dict,
+            "head": _df_to_records(df.head(5)),
+        })
+
+    @app.route("/api/download/filtered")
+    def api_download_filtered():
+        """Download currently filtered and sorted rows as CSV."""
+        df, _analysis, _report = get_data()
+        filtered = _apply_filters(df, request.args)
+
+        sort_col = request.args.get("sort", "").strip().lower()
+        order = request.args.get("order", "asc").strip().lower()
+        if sort_col and sort_col in filtered.columns:
+            ascending = order != "desc"
+            filtered = filtered.sort_values(by=sort_col, ascending=ascending)
+
+        buf = io.StringIO()
+        filtered.to_csv(buf, index=False)
+        return Response(
+            buf.getvalue(),
+            mimetype="text/csv",
+            headers={
+                "Content-Disposition": "attachment; filename=sympsort_filtered_records.csv"
+            },
+        )
+
+    @app.route("/export-csv")
     @app.route("/api/download/summary")
     def api_download_summary():
         """Download analysis summary as CSV."""

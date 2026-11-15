@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ project_name }} — {{ project_title }}</title>
   <link rel="icon" href="{{ url_for('static', filename='img/favicon.ico') }}" type="image/x-icon">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/desktop.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/desktop.css') }}?v={{ asset_version }}">
 </head>
 <body>
   <div class="app">
@@ -83,12 +83,18 @@
         <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle navigation">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
-        <h2 class="header-title" id="headerTitle">Overview</h2>
+        <span class="header-title" id="headerTitle">Overview</span>
+
+        <!-- Contextual Header Actions -->
         <div class="header-actions">
           <button class="btn-icon" id="themeToggle" aria-label="Toggle theme" title="Toggle theme">☀</button>
-          <button class="btn-text" id="reloadBtn">Reload Data</button>
-          <a class="btn-text" href="/api/download/chart" id="exportChartLink">Export Chart</a>
-          <a class="btn-text" href="/api/download/summary">Download CSV</a>
+          <button class="btn-text" id="reloadBtn" title="Reload dataset from disk">Reload Data</button>
+          <!-- Shown on Overview & Cost Comparison -->
+          <button class="btn-text header-action-btn" id="exportChartBtn" title="Export high-resolution chart PNG">Export Chart</button>
+          <!-- Shown on Cost Comparison -->
+          <a class="btn-text header-action-btn" href="/export-csv" id="downloadSummaryLink" title="Download summary metrics CSV">Download summary CSV</a>
+          <!-- Shown on Dataset Explorer -->
+          <a class="btn-text header-action-btn" href="/api/download/filtered" id="downloadFilteredLink" title="Download filtered records CSV">Download filtered CSV</a>
         </div>
       </header>
 
@@ -97,6 +103,11 @@
         <!-- ─── View 1: Overview ─── -->
         <section class="view active" id="view-overview" aria-label="Overview">
           <div class="view-inner">
+            <header class="view-header">
+              <h1 class="view-h1">Overview</h1>
+              <p class="view-lead">Executive summary and primary finding on medical insurance charges comparing smoker cohorts.</p>
+            </header>
+
             <!-- Loading skeleton -->
             <div class="skeleton-block" id="overviewSkeleton">
               <div class="skeleton-line skeleton-line--wide"></div>
@@ -117,34 +128,95 @@
             <div class="overview-content hidden" id="overviewContent">
               <p class="finding-line" id="findingLine"></p>
 
+              <!-- Primary KPIs -->
               <div class="kpi-row">
                 <div class="kpi">
                   <span class="kpi-label">Non-Smoker Average</span>
-                  <span class="kpi-value kpi-nonsmoker" id="kpiNonSmoker">—</span>
+                  <span class="kpi-value kpi-nonsmoker font-tabular" id="kpiNonSmoker">—</span>
                 </div>
                 <div class="kpi">
                   <span class="kpi-label">Smoker Average</span>
-                  <span class="kpi-value kpi-smoker" id="kpiSmoker">—</span>
+                  <span class="kpi-value kpi-smoker font-tabular" id="kpiSmoker">—</span>
                 </div>
               </div>
 
+              <!-- Difference Badge -->
               <div class="diff-row">
-                <span class="diff-abs" id="diffAbs"></span>
-                <span class="diff-badge" id="diffBadge"></span>
+                <span class="diff-abs font-tabular" id="diffAbs"></span>
+                <span class="diff-badge font-tabular" id="diffBadge"></span>
               </div>
 
-              <figure class="chart-figure">
-                <img class="chart-img" id="heroChart" src="" alt="Bar chart comparing smoker vs non-smoker average insurance charges" loading="lazy">
-                <figcaption class="chart-caption">Average medical insurance charges by smoking status (95% CI error bars)</figcaption>
-              </figure>
+              <!-- P1 Compact Secondary KPI Strip (Plain, Typographic, No Boxed Glow) -->
+              <div class="kpi-secondary-row" id="kpiSecondaryRow">
+                <div class="kpi-secondary-item">
+                  <span class="kpi-secondary-label">Multiplier</span>
+                  <span class="kpi-secondary-value font-tabular" id="kpiMultiplier">3.80×</span>
+                </div>
+                <div class="kpi-secondary-divider" aria-hidden="true"></div>
+                <div class="kpi-secondary-item">
+                  <span class="kpi-secondary-label">Non-Smokers</span>
+                  <span class="kpi-secondary-value font-tabular" id="kpiNonSmokerCount">n = 1,064</span>
+                </div>
+                <div class="kpi-secondary-divider" aria-hidden="true"></div>
+                <div class="kpi-secondary-item">
+                  <span class="kpi-secondary-label">Smokers</span>
+                  <span class="kpi-secondary-value font-tabular" id="kpiSmokerCount">n = 274 (20.5% of records)</span>
+                </div>
+                <div class="kpi-secondary-divider" aria-hidden="true"></div>
+                <div class="kpi-secondary-item">
+                  <span class="kpi-secondary-label">Valid Records</span>
+                  <span class="kpi-secondary-value font-tabular" id="kpiValidCount">1,338</span>
+                </div>
+              </div>
 
+              <!-- Main Chart Container -->
+              <div class="chart-container" id="overviewChartContainer">
+                <div class="chart-toolbar">
+                  <div class="chart-tabs" role="tablist" aria-label="Chart render mode">
+                    <button type="button" class="chart-tab active" id="tabSeaborn" data-chart-mode="seaborn">Seaborn (Publication)</button>
+                    <button type="button" class="chart-tab" id="tabCanvas" data-chart-mode="canvas">Interactive Canvas</button>
+                  </div>
+                  <span class="chart-pill">Visible 95% CI Error Whiskers</span>
+                </div>
+
+                <div class="chart-viewport">
+                  <!-- Skeleton while loading -->
+                  <div class="chart-loading-overlay hidden" id="chartLoadingOverlay">
+                    <div class="chart-spinner"></div>
+                    <span>Rendering visualization…</span>
+                  </div>
+
+                  <!-- Error fallback -->
+                  <div class="chart-error-overlay hidden" id="chartErrorOverlay">
+                    <p class="error-message">Failed to load chart visualization.</p>
+                    <button type="button" class="btn-text" id="chartRetryBtn">Retry Loading Chart</button>
+                  </div>
+
+                  <!-- Mode 1: Seaborn Image -->
+                  <figure class="chart-figure" id="seabornFigure">
+                    <img class="chart-img" id="heroChart" src="" alt="Seaborn barplot comparing smoker vs non-smoker average medical insurance charges with 95% confidence interval error bars">
+                    <figcaption class="chart-caption">Average medical insurance charges by smoking status (Seaborn <code>sns.barplot</code> with visible 95% CI error bars)</figcaption>
+                  </figure>
+
+                  <!-- Mode 2: Interactive Canvas -->
+                  <div class="canvas-wrapper hidden" id="canvasWrapper">
+                    <canvas id="overviewCanvas" width="960" height="540" aria-label="Interactive bar chart"></canvas>
+                    <figcaption class="chart-caption">Interactive HTML5 Canvas barplot with 95% CI error bar overlays</figcaption>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Sample Data Section -->
               <div class="sample-section">
-                <h3 class="section-heading">Sample Data</h3>
+                <div class="section-header-row">
+                  <h2 class="section-heading">Sample Data</h2>
+                  <span class="sample-badge">First 5 records</span>
+                </div>
                 <div class="table-scroll">
                   <table class="data-table sample-table" id="sampleTable">
                     <thead>
                       <tr>
-                        <th>Age</th>
+                        <th class="num">Age</th>
                         <th>Sex</th>
                         <th class="num">BMI</th>
                         <th class="num">Children</th>
@@ -153,7 +225,11 @@
                         <th class="num">Charges</th>
                       </tr>
                     </thead>
-                    <tbody id="sampleBody"></tbody>
+                    <tbody id="sampleBody">
+                      <tr class="skeleton-tr">
+                        <td colspan="7"><div class="skeleton-row-line"></div></td>
+                      </tr>
+                    </tbody>
                   </table>
                 </div>
               </div>
@@ -164,6 +240,11 @@
         <!-- ─── View 2: Cost Comparison ─── -->
         <section class="view" id="view-comparison" aria-label="Cost Comparison">
           <div class="view-inner">
+            <header class="view-header">
+              <h1 class="view-h1">Cost Comparison</h1>
+              <p class="view-lead">In-depth statistical breakdown and comparative actuarial metrics between cohorts.</p>
+            </header>
+
             <div class="skeleton-block" id="comparisonSkeleton">
               <div class="skeleton-line skeleton-line--wide"></div>
               <div class="skeleton-chart"></div>
@@ -175,7 +256,7 @@
             </div>
 
             <div class="comparison-content hidden" id="comparisonContent">
-              <h3 class="section-heading">Detailed Statistics</h3>
+              <h2 class="section-heading">Detailed Statistics</h2>
               <div class="table-scroll">
                 <table class="data-table stats-table" id="statsTable">
                   <thead>
@@ -189,10 +270,141 @@
                 </table>
               </div>
 
-              <figure class="chart-figure chart-figure--large">
-                <img class="chart-img" id="comparisonChart" src="" alt="Detailed cost comparison chart" loading="lazy">
-                <figcaption class="chart-caption">Average medical insurance charges by smoking status</figcaption>
-              </figure>
+              <!-- Beyond the Average: Multi-chart Explorer -->
+              <div class="beyond-average-section">
+                <div class="section-header-row">
+                  <h2 class="section-heading">Beyond the Average: Visual Exploration</h2>
+                  <span class="chart-pill" id="comparisonActiveKindBadge">Barplot (Default)</span>
+                </div>
+                <div class="segmented-control-wrapper">
+                  <div class="segmented-control" role="tablist" id="comparisonChartSelector" aria-label="Visual Exploration Types">
+                    <button type="button" class="segmented-btn active" data-kind="bar" role="tab" aria-selected="true">Barplot (Default)</button>
+                    <button type="button" class="segmented-btn" data-kind="dist" role="tab" aria-selected="false">Distribution (KDE)</button>
+                    <button type="button" class="segmented-btn" data-kind="box" role="tab" aria-selected="false">Boxplot</button>
+                    <button type="button" class="segmented-btn" data-kind="scatter" role="tab" aria-selected="false">BMI vs Charges</button>
+                    <button type="button" class="segmented-btn" data-kind="region" role="tab" aria-selected="false">Region × Smoker</button>
+                    <button type="button" class="segmented-btn" data-kind="sex" role="tab" aria-selected="false">Sex × Smoker</button>
+                    <button type="button" class="segmented-btn" data-kind="age" role="tab" aria-selected="false">Age Bands × Smoker</button>
+                  </div>
+                </div>
+
+                <figure class="chart-figure chart-figure--large">
+                  <img class="chart-img" id="comparisonChart" src="" alt="Detailed cost comparison chart" loading="lazy">
+                  <figcaption class="chart-caption" id="comparisonChartCaption">Average medical insurance charges by smoking status (95% CI error whiskers)</figcaption>
+                </figure>
+
+                <!-- Dynamic takeaway card -->
+                <div class="takeaway-card" id="comparisonTakeawayCard">
+                  <span class="takeaway-badge">Dynamic Takeaway</span>
+                  <p class="takeaway-text" id="comparisonTakeawayText">
+                    Smokers pay on average $32,050.23 vs $8,434.27 for non-smokers (3.80× higher, difference +$23,615.96).
+                  </p>
+                </div>
+              </div>
+
+              <!-- Statistical Significance Check -->
+              <div class="stat-significance-card" id="statSignificanceCard">
+                <div class="section-header-row">
+                  <h2 class="section-heading">Is the Difference Real? (Statistical Significance)</h2>
+                  <span class="significance-pill">p &lt; 0.001</span>
+                </div>
+                <div class="stat-metrics-grid">
+                  <div class="stat-metric-cell">
+                    <span class="stat-metric-label">Welch's t-statistic</span>
+                    <span class="stat-metric-value font-tabular" id="statTVal">t = 32.75</span>
+                    <span class="stat-metric-sub">df ≈ 311.85, p &lt; 0.001</span>
+                  </div>
+                  <div class="stat-metric-cell">
+                    <span class="stat-metric-label">Mann–Whitney U test</span>
+                    <span class="stat-metric-value font-tabular" id="statMWVal">p &lt; 0.001</span>
+                    <span class="stat-metric-sub">Non-parametric rank test</span>
+                  </div>
+                  <div class="stat-metric-cell">
+                    <span class="stat-metric-label">Effect Size (Cohen's d)</span>
+                    <span class="stat-metric-value font-tabular" id="statCohenVal">d = 3.16</span>
+                    <span class="stat-metric-sub">Extremely large effect (&gt; 0.8)</span>
+                  </div>
+                </div>
+                <p class="stat-cautionary-note" id="statCautionNote">
+                  <strong>Interpretation Note:</strong> Welch's t-test and Mann–Whitney U confirm the cost disparity is statistically overwhelming (Cohen's d = 3.16). While statistically robust, this observational data demonstrates actuarial association rather than direct biological causation.
+                </p>
+              </div>
+
+              <!-- Compare a Profile Empirical Lookup Tool -->
+              <div class="profile-compare-card" id="profileCompareCard">
+                <div class="section-header-row">
+                  <h2 class="section-heading">Compare a Profile</h2>
+                  <span class="profile-pill">Empirical Subgroup Lookup</span>
+                </div>
+                <p class="section-desc">Select demographic and lifestyle attributes to calculate actual empirical charge metrics from matching records in this dataset.</p>
+                <div class="profile-inputs-grid">
+                  <div class="profile-field">
+                    <label for="profileAge">Age Band</label>
+                    <select class="filter-select" id="profileAge">
+                      <option value="all">All Ages</option>
+                      <option value="18-29">Young Adult (18–29)</option>
+                      <option value="30-44">Middle Age (30–44)</option>
+                      <option value="45-64">Older Adult (45–64)</option>
+                    </select>
+                  </div>
+                  <div class="profile-field">
+                    <label for="profileBmi">BMI Category</label>
+                    <select class="filter-select" id="profileBmi">
+                      <option value="all">All BMI</option>
+                      <option value="<25">Normal (&lt; 25)</option>
+                      <option value="25-29.9">Overweight (25–29.9)</option>
+                      <option value=">=30">Obese (≥ 30)</option>
+                    </select>
+                  </div>
+                  <div class="profile-field">
+                    <label for="profileSex">Sex</label>
+                    <select class="filter-select" id="profileSex">
+                      <option value="all">All</option>
+                      <option value="female">Female</option>
+                      <option value="male">Male</option>
+                    </select>
+                  </div>
+                  <div class="profile-field">
+                    <label for="profileRegion">Region</label>
+                    <select class="filter-select" id="profileRegion">
+                      <option value="all">All Regions</option>
+                      <option value="northeast">Northeast</option>
+                      <option value="northwest">Northwest</option>
+                      <option value="southeast">Southeast</option>
+                      <option value="southwest">Southwest</option>
+                    </select>
+                  </div>
+                  <div class="profile-field">
+                    <label for="profileSmoker">Smoker Status</label>
+                    <select class="filter-select" id="profileSmoker">
+                      <option value="all">All</option>
+                      <option value="no">Non-Smoker</option>
+                      <option value="yes">Smoker</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="profile-results-box" id="profileResultsBox">
+                  <div class="profile-results-grid">
+                    <div class="profile-res-item">
+                      <span class="profile-res-label">Matched Records</span>
+                      <span class="profile-res-val font-tabular" id="profileMatchCount">1,338</span>
+                    </div>
+                    <div class="profile-res-item">
+                      <span class="profile-res-label">Empirical Mean</span>
+                      <span class="profile-res-val font-tabular" id="profileMatchMean">$13,270.42</span>
+                    </div>
+                    <div class="profile-res-item">
+                      <span class="profile-res-label">Empirical Median</span>
+                      <span class="profile-res-val font-tabular" id="profileMatchMedian">$9,382.03</span>
+                    </div>
+                    <div class="profile-res-item">
+                      <span class="profile-res-label">Observed Range</span>
+                      <span class="profile-res-val font-tabular" id="profileMatchRange">$1,121.87 – $63,770.43</span>
+                    </div>
+                  </div>
+                  <div class="profile-warning hidden" id="profileWarning"></div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -200,13 +412,24 @@
         <!-- ─── View 3: Dataset Explorer ─── -->
         <section class="view" id="view-explorer" aria-label="Dataset Explorer">
           <div class="view-inner">
+            <header class="view-header">
+              <h1 class="view-h1">Dataset Explorer</h1>
+              <p class="view-lead">Filter, sort, search, and inspect the individual 1,338 medical insurance records.</p>
+            </header>
+
             <div class="explorer-controls">
               <div class="control-group">
                 <input type="search" class="search-input" id="explorerSearch" placeholder="Search records…" aria-label="Search records">
               </div>
-              <div class="control-group">
-                <select class="filter-select" id="smokerFilter" aria-label="Filter by smoker status">
-                  <option value="">All</option>
+              <div class="control-group control-group--filters">
+                <div class="smoker-pills" id="smokerPills" role="radiogroup" aria-label="Filter by smoking status">
+                  <button type="button" class="smoker-pill active" data-smoker="" role="radio" aria-checked="true">All (1,338)</button>
+                  <button type="button" class="smoker-pill" data-smoker="no" role="radio" aria-checked="false">Non-smokers (1,064)</button>
+                  <button type="button" class="smoker-pill" data-smoker="yes" role="radio" aria-checked="false">Smokers (274)</button>
+                </div>
+                <!-- Hidden fallback select for programmatic compatibility -->
+                <select class="filter-select hidden" id="smokerFilter" aria-label="Filter by smoker status">
+                  <option value="" selected>All</option>
                   <option value="no">Non-smokers</option>
                   <option value="yes">Smokers</option>
                 </select>
@@ -217,10 +440,31 @@
                   <option value="southeast">Southeast</option>
                   <option value="southwest">Southwest</option>
                 </select>
+                <button type="button" class="btn-text btn-reset-filters" id="resetFiltersBtn">Reset Filters</button>
               </div>
             </div>
 
-            <div class="table-scroll">
+            <!-- Live Selection Summary Strip -->
+            <div class="selection-summary-strip" id="selectionSummaryStrip">
+              <div class="selection-metric">
+                <span class="sel-label">Matched Records</span>
+                <span class="sel-val font-tabular" id="selCount">1,338 rows</span>
+              </div>
+              <div class="selection-metric">
+                <span class="sel-label">Mean Charge</span>
+                <span class="sel-val font-tabular" id="selMean">$13,270.42</span>
+              </div>
+              <div class="selection-metric">
+                <span class="sel-label">Median Charge</span>
+                <span class="sel-val font-tabular" id="selMedian">$9,382.03</span>
+              </div>
+              <div class="selection-metric">
+                <span class="sel-label">Mean BMI</span>
+                <span class="sel-val font-tabular" id="selBmi">30.66</span>
+              </div>
+            </div>
+
+            <div class="table-scroll table-scroll--sticky">
               <table class="data-table explorer-table" id="explorerTable">
                 <thead>
                   <tr id="explorerHead"></tr>
@@ -252,13 +496,18 @@
         <!-- ─── View 4: Methodology ─── -->
         <section class="view" id="view-methodology" aria-label="Methodology">
           <div class="view-inner">
-            <h3 class="section-heading">Analysis Pipeline</h3>
+            <header class="view-header">
+              <h1 class="view-h1">Methodology</h1>
+              <p class="view-lead">Data science workflow, verification pipeline, and reproducible Pandas computations.</p>
+            </header>
+
+            <h2 class="section-heading">Analysis Pipeline</h2>
             <ol class="pipeline-steps">
-              <li><strong>Load</strong> — Read <code>insurance.csv</code> into a Pandas DataFrame</li>
-              <li><strong>Validate</strong> — Ensure required columns (<code>smoker</code>, <code>charges</code>) exist</li>
-              <li><strong>Clean</strong> — Normalize smoker values, coerce charges to float, drop invalid rows</li>
+              <li><strong>Load</strong> — Read <code>insurance.csv</code> into a Pandas DataFrame using absolute path resolution</li>
+              <li><strong>Validate</strong> — Ensure required columns (<code>smoker</code>, <code>charges</code>) exist and validate data types</li>
+              <li><strong>Clean</strong> — Trim whitespace, lowercase smoker categories, coerce charges to numeric, drop corrupted rows</li>
               <li><strong>GroupBy</strong> — <code>df.groupby('smoker')['charges'].mean()</code></li>
-              <li><strong>Plot</strong> — Generate Seaborn barplot with 95% CI error bars</li>
+              <li><strong>Plot</strong> — Generate Seaborn barplot with <code>errorbar=('ci', 95)</code>, <code>capsize=0.15</code>, and exact value annotations</li>
             </ol>
 
             <div class="code-block-wrapper">
@@ -270,27 +519,79 @@
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-# Load dataset
+# 1. Load dataset
 df = pd.read_csv("data/insurance.csv")
 
-# Core analysis
+# 2. Core Pandas calculation (assigned deliverable)
 grouped = df.groupby('smoker')['charges'].mean()
 print(grouped)
 
-# Visualization
-sns.barplot(data=df, x='smoker', y='charges',
-            estimator='mean', errorbar=('ci', 95))
-plt.title("Average Insurance Charges by Smoking Status")
-plt.ylabel("Average Charges ($)")
-plt.xlabel("Smoker")
+# 3. Seaborn visualization with 95% CI error whiskers
+fig, ax = plt.subplots(figsize=(9.6, 5.4))
+sns.barplot(
+    data=df,
+    x='smoker',
+    y='charges',
+    order=['no', 'yes'],
+    errorbar=('ci', 95),
+    capsize=0.15,
+    err_kws={'linewidth': 2.2, 'color': '#1C1B19'},
+    palette={'no': '#1F6F63', 'yes': '#B5442E'},
+    ax=ax,
+)
+plt.ylabel("Mean Charges (USD)")
+plt.xlabel("")
 plt.tight_layout()
 plt.savefig("outputs/smoker_charges_comparison.png", dpi=300)
 plt.show()</code></pre>
             </div>
 
             <div class="groupby-output">
-              <h4 class="section-subheading">Live GroupBy Output</h4>
+              <h2 class="section-subheading">Live GroupBy Output</h2>
               <pre class="output-block" id="groupbyOutput">Loading…</pre>
+            </div>
+
+            <!-- Live Data Quality & Ingestion Audit Card -->
+            <div class="quality-audit-card" id="qualityAuditCard">
+              <div class="section-header-row">
+                <h2 class="section-subheading">Data Quality &amp; Ingestion Audit</h2>
+                <span class="quality-pill" id="auditStatusPill">Validated (1,338 rows)</span>
+              </div>
+              <div class="quality-audit-grid">
+                <div class="quality-cell">
+                  <span class="quality-label">Raw Rows Ingested</span>
+                  <span class="quality-val font-tabular" id="auditRawRows">1,338</span>
+                </div>
+                <div class="quality-cell">
+                  <span class="quality-label">Valid Actuarial Rows</span>
+                  <span class="quality-val font-tabular" id="auditValidRows">1,338</span>
+                </div>
+                <div class="quality-cell">
+                  <span class="quality-label">Excluded / Corrupt</span>
+                  <span class="quality-val font-tabular" id="auditExcludedRows">0</span>
+                </div>
+                <div class="quality-cell">
+                  <span class="quality-label">Null Charges / Smoker</span>
+                  <span class="quality-val font-tabular" id="auditNulls">0</span>
+                </div>
+              </div>
+
+              <div class="quality-tabs-container">
+                <div class="quality-tabs" role="tablist" aria-label="Data inspection modes">
+                  <button type="button" class="quality-tab active" data-qtab="describe" role="tab" aria-selected="true">df.describe()</button>
+                  <button type="button" class="quality-tab" data-qtab="head" role="tab" aria-selected="false">df.head()</button>
+                  <button type="button" class="quality-tab" data-qtab="info" role="tab" aria-selected="false">df.info()</button>
+                </div>
+                <div class="quality-tab-pane" id="qualityDescribePane">
+                  <pre class="output-block" id="auditDescribeOutput">Loading summary statistics…</pre>
+                </div>
+                <div class="quality-tab-pane hidden" id="qualityHeadPane">
+                  <pre class="output-block" id="auditHeadOutput">Loading first 5 records…</pre>
+                </div>
+                <div class="quality-tab-pane hidden" id="qualityInfoPane">
+                  <pre class="output-block" id="auditInfoOutput">Loading schema and non-null audit…</pre>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -298,35 +599,79 @@ plt.show()</code></pre>
         <!-- ─── View 5: About ─── -->
         <section class="view" id="view-about" aria-label="About">
           <div class="view-inner">
-            <h3 class="section-heading">About This Project</h3>
+            <header class="view-header">
+              <h1 class="view-h1">About This Project</h1>
+              <p class="view-lead">Course affiliation, official laboratory problem statement, student submission, and dataset lineage.</p>
+            </header>
 
+            <!-- Assigned Problem Statement (Word-for-word requirement) -->
             <div class="about-card">
-              <h4 class="section-subheading">Course Information</h4>
+              <h2 class="section-subheading">Assigned Problem Statement</h2>
+              <blockquote class="about-blockquote">
+                "Find the average insurance charge for smokers vs. non-smokers using Pandas. Create a Seaborn barplot to visually compare the average costs between the two groups."
+              </blockquote>
+            </div>
+
+            <!-- Course Information -->
+            <div class="about-card">
+              <h2 class="section-subheading">Course Information</h2>
               <dl class="about-dl">
                 <dt>Course</dt>
-                <dd>{{ course_name }} ({{ course_code }})</dd>
-                <dt>Project</dt>
-                <dd>{{ project_title }}</dd>
-                <dt>Problem Statement</dt>
-                <dd>{{ problem_statement }}</dd>
+                <dd>B.Tech IT Workshop Lab (PCC CS 393), Academic Year 2026–27</dd>
+                <dt>Course Code</dt>
+                <dd>{{ course_code }}</dd>
+                <dt>Project Title</dt>
+                <dd>{{ project_name }} — {{ project_title }}</dd>
+                <dt>Scope</dt>
+                <dd>Empirical health economics and lifestyle factor analysis using Python data science libraries.</dd>
               </dl>
             </div>
 
+            <!-- Submission Details (Placeholders to fill in) -->
             <div class="about-card">
-              <h4 class="section-subheading">Dataset</h4>
+              <h2 class="section-subheading">Submission Details</h2>
+              <dl class="about-dl">
+                <dt>Student Name</dt>
+                <dd><span class="placeholder-tag">[Student Name]</span></dd>
+                <dt>Roll Number</dt>
+                <dd><span class="placeholder-tag">[University Roll / Registration Number]</span></dd>
+                <dt>Section / Group</dt>
+                <dd><span class="placeholder-tag">[Section / Batch]</span></dd>
+                <dt>Faculty Guide</dt>
+                <dd><span class="placeholder-tag">[Faculty Guide / Lab Instructor]</span></dd>
+              </dl>
+            </div>
+
+            <!-- Technology Stack -->
+            <div class="about-card">
+              <h2 class="section-subheading">Technology Stack</h2>
+              <div class="tech-grid">
+                <div class="tech-item"><strong>Python</strong> 3.13</div>
+                <div class="tech-item"><strong>Flask</strong> 3.0</div>
+                <div class="tech-item"><strong>Pandas</strong> 2.2+</div>
+                <div class="tech-item"><strong>Seaborn</strong> 0.13+</div>
+                <div class="tech-item"><strong>Matplotlib</strong> 3.8+</div>
+                <div class="tech-item"><strong>Pytest</strong> 9.1+</div>
+              </div>
+            </div>
+
+            <!-- Dataset Source -->
+            <div class="about-card">
+              <h2 class="section-subheading">Dataset Source</h2>
               <p>
                 <a href="{{ dataset_source_url }}" target="_blank" rel="noopener noreferrer">{{ dataset_source_name }}</a>
-                — 1,338 records of individual medical insurance charges with demographic and lifestyle features.
+                — 1,338 records of individual medical insurance charges with demographic and lifestyle features (Kaggle).
               </p>
             </div>
 
+            <!-- Limitations -->
             <div class="about-card">
-              <h4 class="section-subheading">Limitations</h4>
+              <h2 class="section-subheading">Methodological Limitations</h2>
               <ul class="limitations-list">
                 <li><strong>Observational data</strong> — This is a cross-sectional observational dataset. Subjects were not randomly assigned to smoking/non-smoking groups.</li>
                 <li><strong>Correlation ≠ Causation</strong> — The difference in charges between smokers and non-smokers does not prove that smoking <em>causes</em> higher charges. Confounders (age, BMI, region) may contribute.</li>
-                <li><strong>Unbalanced groups</strong> — Non-smokers (n ≈ 1,064) vastly outnumber smokers (n ≈ 274), which affects statistical power and confidence interval widths.</li>
-                <li><strong>Single source</strong> — Results may not generalize beyond this particular dataset or insurance market.</li>
+                <li><strong>Unbalanced groups</strong> — Non-smokers (n = 1,064) outnumber smokers (n = 274), which affects statistical power and variance estimates.</li>
+                <li><strong>Single source</strong> — Results reflect this specific insurance dataset and should not be used for clinical decision-making.</li>
               </ul>
             </div>
           </div>
@@ -338,6 +683,6 @@ plt.show()</code></pre>
   <!-- Toast container -->
   <div class="toast-container" id="toastContainer" aria-live="polite"></div>
 
-  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v={{ asset_version }}"></script>
 </body>
 </html>
