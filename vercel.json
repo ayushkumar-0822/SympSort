@@ -5,11 +5,7 @@
   },
   "functions": {
     "app.py": {
-      "includeFiles": [
-        "templates/**",
-        "static/**",
-        "data/**"
-      ]
+      "includeFiles": "{templates/**,static/**,data/**}"
     }
   }
 }
