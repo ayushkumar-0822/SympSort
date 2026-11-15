@@ -445,6 +445,38 @@ def create_app() -> Flask:
             },
         )
 
+    # ── Global Exception Handler (Surfaces full traceback for Vercel debugging) ──
+    @app.errorhandler(Exception)
+    def handle_all_exceptions(exc: Exception):
+        import html
+        import traceback
+
+        tb = traceback.format_exc()
+        logger.critical("Unhandled Exception: %s", tb)
+        print(f"CRITICAL APP ERROR:\n{tb}", file=sys.stderr, flush=True)
+
+        code = getattr(exc, "code", 500)
+        return (
+            f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>SympSort Server Error ({code})</title>
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; background: #141416; color: #f4f4f5; padding: 2.5rem; }}
+    h1 {{ color: #f87171; font-size: 1.3rem; margin-top: 0; }}
+    pre {{ background: #1f1f23; border: 1px solid #333; padding: 1.25rem; border-radius: 6px; overflow-x: auto; font-size: 0.88rem; line-height: 1.5; color: #e4e4e7; }}
+  </style>
+</head>
+<body>
+  <h1>Server Error ({code}): {html.escape(str(exc))}</h1>
+  <pre>{html.escape(tb)}</pre>
+</body>
+</html>""",
+            code,
+            {"Content-Type": "text/html; charset=utf-8"},
+        )
+
     return app
 
 

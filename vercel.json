@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/(.*)",
-      "destination": "/api/index.py"
+      "destination": "/api/index"
     }
   ],
   "env": {
@@ -11,7 +11,11 @@
   },
   "functions": {
     "api/index.py": {
-      "includeFiles": "templates/**,static/**,data/**"
+      "includeFiles": [
+        "templates/**",
+        "static/**",
+        "data/**"
+      ]
     }
   }
 }
