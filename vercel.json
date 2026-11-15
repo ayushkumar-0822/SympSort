@@ -1,16 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/api/index"
-    }
-  ],
   "env": {
     "MPLCONFIGDIR": "/tmp/.matplotlib"
   },
   "functions": {
-    "api/index.py": {
+    "app.py": {
       "includeFiles": [
         "templates/**",
         "static/**",
