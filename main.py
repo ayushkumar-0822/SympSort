@@ -17,6 +17,10 @@ import logging
 import socket
 import sys
 
+# WSGI application instance export for Vercel / serverless runtimes
+from app import app
+
+
 # ── Logging setup ─────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
@@ -80,9 +84,7 @@ def _run_server() -> None:
     port = _find_open_port(DEFAULT_PORT)
     logger.info("Starting SympSort web server …")
 
-    from app import create_app
-
-    app = create_app()
+    from app import app
 
     print("\n" + "=" * 60)
     print("  SympSort — Medical Cost & Lifestyle Factors")

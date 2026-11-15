@@ -486,3 +486,8 @@ def _df_to_records(df: pd.DataFrame) -> list[dict[str, Any]]:
                 record[col] = str(val)
         records.append(record)
     return records
+
+
+# ── WSGI Application Instance for Vercel / Gunicorn Deployment ───────────────
+app = create_app()
+

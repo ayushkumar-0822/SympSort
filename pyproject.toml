@@ -1,0 +1,9 @@
+[project]
+name = "sympsort"
+version = "1.0.0"
+description = "SympSort — Medical Cost & Lifestyle Factors Analysis"
+readme = "README.md"
+requires-python = ">=3.9"
+
+[tool.vercel]
+entrypoint = "app:app"
