@@ -111,8 +111,6 @@ def create_app() -> Flask:
     # ── Page routes ───────────────────────────────────────────────────────
 
     @app.route("/")
-    @app.route("/api/index")
-    @app.route("/api")
     def index():
         """Serve the single-page application shell."""
         df, analysis, report = get_data()
@@ -140,6 +138,23 @@ def create_app() -> Flask:
         )
 
     # ── API routes ────────────────────────────────────────────────────────
+
+    @app.route("/api")
+    def api_root():
+        """API discovery endpoint."""
+        return jsonify({
+            "status": "ok",
+            "message": "SympSort API is active",
+            "endpoints": [
+                "/api/health",
+                "/api/summary",
+                "/api/chart",
+                "/api/data",
+                "/api/sample-data",
+                "/api/profile-match",
+                "/api/data-quality",
+            ],
+        })
 
     @app.route("/api/health")
     def api_health():

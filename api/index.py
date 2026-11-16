@@ -37,10 +37,13 @@ def app(environ, start_response):
         target = params.pop("__path__")[0]
         environ["PATH_INFO"] = target
         environ["QUERY_STRING"] = urllib.parse.urlencode(params, doseq=True)
-    # 2. If Vercel rewrote to /api/index without __path__, check headers or default to /
+    # 2. Check if Vercel passed original path in standard proxy/edge headers
     elif environ.get("PATH_INFO") in ("/api/index", "/api/index.py", "/api", ""):
         raw_path = (
-            environ.get("HTTP_X_FORWARDED_URI")
+            environ.get("HTTP_X_MATCHED_PATH")
+            or environ.get("HTTP_X_FORWARDED_URI")
+            or environ.get("HTTP_X_FORWARDED_PATH")
+            or environ.get("HTTP_X_ORIGINAL_URL")
             or environ.get("REQUEST_URI")
             or environ.get("RAW_URI")
             or ""
