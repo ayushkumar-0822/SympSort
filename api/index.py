@@ -51,7 +51,13 @@ class VercelPathMiddleware:
             else:
                 environ["PATH_INFO"] = "/"
 
-        return self.wsgi_app(environ, start_response)
+        try:
+            return self.wsgi_app(environ, start_response)
+        except Exception as exc:
+            import traceback
+            tb = traceback.format_exc()
+            start_response("500 Internal Server Error", [("Content-Type", "text/plain; charset=utf-8")])
+            return [f"FLASK ERROR:\n{tb}".encode("utf-8")]
 
 
 # Initialize Flask app and attach middleware
