@@ -28,6 +28,9 @@ class VercelPathMiddleware:
         qs = environ.get("QUERY_STRING", "")
         params = urllib.parse.parse_qs(qs, keep_blank_values=True)
 
+        orig_path = environ.get("PATH_INFO", "")
+        matched_path = environ.get("HTTP_X_MATCHED_PATH", "")
+
         # 1. Check if the true path was forwarded in query parameter __path__
         if "__path__" in params:
             target = params.pop("__path__")[0]
@@ -51,8 +54,15 @@ class VercelPathMiddleware:
             else:
                 environ["PATH_INFO"] = "/"
 
+        def custom_start_response(status, headers, exc_info=None):
+            headers.append(("X-Environ-Orig-Path", str(orig_path)))
+            headers.append(("X-Environ-Matched-Path", str(matched_path)))
+            headers.append(("X-Environ-Final-Path", str(environ.get("PATH_INFO"))))
+            headers.append(("X-Environ-Final-Query", str(environ.get("QUERY_STRING"))))
+            return start_response(status, headers, exc_info)
+
         try:
-            return self.wsgi_app(environ, start_response)
+            return self.wsgi_app(environ, custom_start_response)
         except Exception as exc:
             import traceback
             tb = traceback.format_exc()
