@@ -20,9 +20,23 @@ flask_app = create_app()
 
 def app(environ, start_response):
     """Normalize Vercel rewrite paths before dispatching to Flask."""
-    path = environ.get("PATH_INFO", "")
-    if path in ("/api/index", "/api/index.py", "/api", ""):
-        environ["PATH_INFO"] = "/"
+    # Check for original URL in headers injected by Vercel
+    raw_path = (
+        environ.get("HTTP_X_FORWARDED_URI")
+        or environ.get("REQUEST_URI")
+        or environ.get("RAW_URI")
+        or environ.get("PATH_INFO", "")
+    )
+    if "?" in raw_path:
+        raw_path = raw_path.split("?", 1)[0]
+
+    # If Vercel rewrote the path to /api/index, restore the true original path
+    if environ.get("PATH_INFO") in ("/api/index", "/api/index.py", "/api"):
+        if raw_path and not raw_path.startswith("/api/index"):
+            environ["PATH_INFO"] = raw_path
+        else:
+            environ["PATH_INFO"] = "/"
+
     return flask_app(environ, start_response)
 
 application = app
