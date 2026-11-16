@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+import urllib.parse
 from pathlib import Path
 
 # Add project root to sys.path so all imports resolve seamlessly in serverless
@@ -20,18 +21,24 @@ flask_app = create_app()
 
 def app(environ, start_response):
     """Normalize Vercel rewrite paths before dispatching to Flask."""
-    # Check for original URL in headers injected by Vercel
-    raw_path = (
-        environ.get("HTTP_X_FORWARDED_URI")
-        or environ.get("REQUEST_URI")
-        or environ.get("RAW_URI")
-        or environ.get("PATH_INFO", "")
-    )
-    if "?" in raw_path:
-        raw_path = raw_path.split("?", 1)[0]
+    qs = environ.get("QUERY_STRING", "")
+    params = urllib.parse.parse_qs(qs, keep_blank_values=True)
 
-    # If Vercel rewrote the path to /api/index, restore the true original path
-    if environ.get("PATH_INFO") in ("/api/index", "/api/index.py", "/api"):
+    # 1. Check if the true path was forwarded in query parameter __path__
+    if "__path__" in params:
+        target = params.pop("__path__")[0]
+        environ["PATH_INFO"] = target
+        environ["QUERY_STRING"] = urllib.parse.urlencode(params, doseq=True)
+    # 2. If Vercel rewrote to /api/index without __path__, check headers or default to /
+    elif environ.get("PATH_INFO") in ("/api/index", "/api/index.py", "/api", ""):
+        raw_path = (
+            environ.get("HTTP_X_FORWARDED_URI")
+            or environ.get("REQUEST_URI")
+            or environ.get("RAW_URI")
+            or ""
+        )
+        if "?" in raw_path:
+            raw_path = raw_path.split("?", 1)[0]
         if raw_path and not raw_path.startswith("/api/index"):
             environ["PATH_INFO"] = raw_path
         else:

@@ -2,8 +2,20 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
-      "source": "/((?!static|css|js|fonts|img|favicon.ico).*)",
+      "source": "/",
       "destination": "/api/index"
+    },
+    {
+      "source": "/api",
+      "destination": "/api/index?__path__=/api"
+    },
+    {
+      "source": "/api/:match*",
+      "destination": "/api/index?__path__=/api/:match*"
+    },
+    {
+      "source": "/export-csv",
+      "destination": "/api/index?__path__=/export-csv"
     }
   ],
   "env": {
