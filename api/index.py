@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
-import traceback
 import urllib.parse
 from pathlib import Path
 
@@ -16,31 +15,17 @@ if str(PROJECT_ROOT) not in sys.path:
 mpl_dir = os.path.join(tempfile.gettempdir(), ".matplotlib")
 os.environ.setdefault("MPLCONFIGDIR", mpl_dir)
 
-_init_error = None
-try:
-    from app import create_app
-    flask_app = create_app()
-except Exception as e:
-    _init_error = traceback.format_exc()
-    flask_app = None
+from app import create_app
 
 
-def app(environ, start_response):
-    """Normalize Vercel rewrite paths before dispatching to Flask."""
-    try:
-        if _init_error:
-            start_response("500 Internal Server Error", [("Content-Type", "text/plain; charset=utf-8")])
-            return [f"INIT CRASH:\n{_init_error}".encode("utf-8")]
+class VercelPathMiddleware:
+    """WSGI middleware to restore original request paths from Vercel rewrites and edge headers."""
 
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+
+    def __call__(self, environ, start_response):
         qs = environ.get("QUERY_STRING", "")
-
-        # Production debug endpoint to inspect exact Vercel environ headers
-        if "debug_env" in qs or environ.get("PATH_INFO") == "/api/debug_env":
-            start_response("200 OK", [("Content-Type", "application/json")])
-            import json
-            info = {k: str(v) for k, v in environ.items() if k.startswith(("HTTP_", "REQUEST_", "PATH_", "QUERY_", "SCRIPT_", "RAW_", "VERCEL_"))}
-            return [json.dumps(info, indent=2).encode("utf-8")]
-
         params = urllib.parse.parse_qs(qs, keep_blank_values=True)
 
         # 1. Check if the true path was forwarded in query parameter __path__
@@ -66,11 +51,10 @@ def app(environ, start_response):
             else:
                 environ["PATH_INFO"] = "/"
 
-        return flask_app(environ, start_response)
-    except Exception as exc:
-        tb = traceback.format_exc()
-        start_response("500 Internal Server Error", [("Content-Type", "text/plain; charset=utf-8")])
-        return [f"WSGI HANDLER CRASH:\n{tb}".encode("utf-8")]
+        return self.wsgi_app(environ, start_response)
 
 
+# Initialize Flask app and attach middleware
+app = create_app()
+app.wsgi_app = VercelPathMiddleware(app.wsgi_app)
 application = app

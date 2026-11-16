@@ -2,10 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
-      "source": "/",
-      "destination": "/api/index"
-    },
-    {
       "source": "/api",
       "destination": "/api/index?__path__=/api"
     },
@@ -16,6 +12,10 @@
     {
       "source": "/export-csv",
       "destination": "/api/index?__path__=/export-csv"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/api/index"
     }
   ],
   "env": {
