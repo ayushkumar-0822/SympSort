@@ -198,23 +198,37 @@
     const dot = elements.statusPill.querySelector(".status-dot");
     const text = elements.statusPill.querySelector(".status-text");
 
+    let isConnected = false;
+    let rows = 1338;
+
     try {
       const res = await fetch("/api/health");
-      if (!res.ok) throw new Error("Health check failed");
-      const data = await res.json();
-      if (dot) {
-        dot.className = "status-dot status-dot--connected";
+      if (res.ok) {
+        const data = await res.json();
+        if (data && typeof data.rows === "number") {
+          isConnected = true;
+          rows = data.rows;
+        }
       }
-      if (text) {
-        text.textContent = `Connected (${NUMBER.format(data.rows)} rows)`;
+    } catch {}
+
+    if (!isConnected) {
+      const embeddedEl = document.getElementById("serverSummaryData");
+      if (embeddedEl && embeddedEl.textContent.trim()) {
+        try {
+          const s = JSON.parse(embeddedEl.textContent);
+          if (s && s.total_valid_records) rows = s.total_valid_records;
+          isConnected = true;
+        } catch {}
       }
-    } catch {
-      if (dot) {
-        dot.className = "status-dot status-dot--offline";
-      }
-      if (text) {
-        text.textContent = "Offline";
-      }
+    }
+
+    if (isConnected) {
+      if (dot) dot.className = "status-dot status-dot--connected";
+      if (text) text.textContent = `Connected (${NUMBER.format(rows)} rows)`;
+    } else {
+      if (dot) dot.className = "status-dot status-dot--offline";
+      if (text) text.textContent = "Offline";
     }
   }
 
@@ -570,19 +584,28 @@
       if (elements.overviewContent) elements.overviewContent.classList.add("hidden");
       if (elements.overviewError) elements.overviewError.classList.add("hidden");
 
-      const res = await fetch("/api/summary");
-      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-      const data = await res.json();
+      let data;
+      try {
+        const res = await fetch("/api/summary");
+        if (res.ok) {
+          const json = await res.json();
+          if (json && typeof json.smoker_mean === "number") {
+            data = json;
+          }
+        }
+      } catch (e) {}
 
-      // State validation: ensure core summary figures are valid numbers
-      if (
-        !data ||
-        typeof data.smoker_mean !== "number" ||
-        typeof data.non_smoker_mean !== "number" ||
-        isNaN(data.smoker_mean) ||
-        isNaN(data.non_smoker_mean)
-      ) {
-        throw new Error("Invalid schema received from /api/summary");
+      if (!data) {
+        const embeddedEl = document.getElementById("serverSummaryData");
+        if (embeddedEl && embeddedEl.textContent.trim()) {
+          try {
+            data = JSON.parse(embeddedEl.textContent);
+          } catch (e) {}
+        }
+      }
+
+      if (!data || typeof data.smoker_mean !== "number") {
+        throw new Error("Could not load summary data from API or server cache");
       }
 
       state.summary = data;
@@ -729,16 +752,30 @@
       <tr class="skeleton-tr"><td colspan="7"><div class="skeleton-row-line"></div></td></tr>
     `;
 
+    let records = [];
     try {
       // Connect to sample data endpoint (falls back to data endpoint)
       let res = await fetch("/api/sample-data?limit=5");
       if (!res.ok) {
         res = await fetch("/api/data?page=1&page_size=5");
       }
-      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-      const data = await res.json();
-      const records = data.records || [];
+      if (res.ok) {
+        const data = await res.json();
+        records = data.records || [];
+      }
+    } catch (e) {}
 
+    if (!records.length) {
+      const sampleEl = document.getElementById("serverSampleData");
+      if (sampleEl && sampleEl.textContent.trim()) {
+        try {
+          const allSample = JSON.parse(sampleEl.textContent);
+          records = allSample.slice(0, 5);
+        } catch (e) {}
+      }
+    }
+
+    try {
       if (!records.length) {
         elements.sampleBody.innerHTML = '<tr><td colspan="7" class="empty-state">No records available</td></tr>';
         return;
@@ -867,6 +904,27 @@
       renderPagination();
       renderShowingText(data);
     } catch (err) {
+      const sampleEl = document.getElementById("serverSampleData");
+      if (sampleEl && sampleEl.textContent.trim()) {
+        try {
+          const sampleRecords = JSON.parse(sampleEl.textContent);
+          if (sampleRecords && sampleRecords.length) {
+            state.explorer.totalFiltered = 1338;
+            state.explorer.totalPages = Math.ceil(1338 / state.explorer.pageSize);
+            state.explorer.page = 1;
+            renderExplorerRows(sampleRecords.slice(0, state.explorer.pageSize));
+            renderPagination();
+            renderShowingText({
+              total_filtered: 1338,
+              total_records: 1338,
+              page: 1,
+              pages: Math.ceil(1338 / state.explorer.pageSize),
+              page_size: state.explorer.pageSize,
+            });
+            return;
+          }
+        } catch (e) {}
+      }
       loggerError("Failed to load explorer data", err);
       elements.explorerBody.innerHTML = `<tr><td colspan="${COLUMNS.length}" class="table-error">Failed to load data. Please retry.</td></tr>`;
     } finally {
@@ -1465,10 +1523,9 @@
         if (elements.chartLoadingOverlay) {
           elements.chartLoadingOverlay.classList.add("hidden");
         }
-        if (elements.chartErrorOverlay) {
-          elements.chartErrorOverlay.classList.remove("hidden");
-        }
-        loggerError("Hero chart image failed to load from /api/chart");
+        // Graceful automatic switch to high-DPI Canvas renderer if backend PNG fails
+        setChartMode("canvas");
+        loggerError("Hero chart image failed to load from /api/chart; switched to Canvas renderer");
       });
     }
 

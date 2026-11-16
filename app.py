@@ -15,6 +15,7 @@ import math
 import os
 from pathlib import Path
 import tempfile
+import urllib.parse
 from typing import Any, Optional
 
 # Ensure Matplotlib config directory is writable across all OS & serverless environments
@@ -37,6 +38,48 @@ from data_loader import ValidationReport, load_dataset
 from visualization import clear_chart_cache, generate_chart_bytes, save_default_chart
 
 logger = logging.getLogger(__name__)
+
+
+class VercelPathMiddleware:
+    """WSGI middleware to restore original request paths from Vercel rewrites and edge headers."""
+
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+
+    def __call__(self, environ, start_response):
+        qs = environ.get("QUERY_STRING", "")
+        params = urllib.parse.parse_qs(qs, keep_blank_values=True)
+
+        # 1. Check if the true path was forwarded in query parameter __path__
+        if "__path__" in params:
+            target = params.pop("__path__")[0]
+            environ["PATH_INFO"] = target
+            environ["QUERY_STRING"] = urllib.parse.urlencode(params, doseq=True)
+        # 2. Check if Vercel passed original path in standard proxy/edge headers
+        elif environ.get("PATH_INFO") in ("/api/index", "/api/index.py", "/api", ""):
+            raw_path = (
+                environ.get("HTTP_X_MATCHED_PATH")
+                or environ.get("HTTP_X_FORWARDED_URI")
+                or environ.get("HTTP_X_FORWARDED_PATH")
+                or environ.get("HTTP_X_ORIGINAL_URL")
+                or environ.get("REQUEST_URI")
+                or environ.get("RAW_URI")
+                or ""
+            )
+            if "?" in raw_path:
+                raw_path = raw_path.split("?", 1)[0]
+            if raw_path and not raw_path.startswith("/api/index"):
+                environ["PATH_INFO"] = raw_path
+            else:
+                environ["PATH_INFO"] = "/"
+
+        try:
+            return self.wsgi_app(environ, start_response)
+        except Exception as exc:
+            import traceback
+            tb = traceback.format_exc()
+            start_response("500 Internal Server Error", [("Content-Type", "text/plain; charset=utf-8")])
+            return [f"FLASK ERROR:\n{tb}".encode("utf-8")]
 
 
 def create_app() -> Flask:
@@ -115,6 +158,7 @@ def create_app() -> Flask:
     def index():
         """Serve the single-page application shell."""
         df, analysis, report = get_data()
+        sample_records = _df_to_records(df.head(50)) if (df is not None and not df.empty) else []
         return render_template(
             "index.html",
             project_name=config.PROJECT_NAME,
@@ -129,6 +173,7 @@ def create_app() -> Flask:
             dataset_source_url=config.DATASET_SOURCE_URL,
             dataset_source_name=getattr(config, "DATASET_SOURCE_NAME", "Medical Cost Personal Datasets (Kaggle)"),
             analysis=analysis.to_dict(),
+            sample_records=sample_records,
             report={
                 "is_valid": report.is_valid,
                 "total_raw_rows": report.total_raw_rows,
@@ -495,6 +540,7 @@ def create_app() -> Flask:
             {"Content-Type": "text/html; charset=utf-8"},
         )
 
+    app.wsgi_app = VercelPathMiddleware(app.wsgi_app)
     return app
 
 

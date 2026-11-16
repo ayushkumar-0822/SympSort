@@ -683,6 +683,14 @@ plt.show()</code></pre>
   <!-- Toast container -->
   <div class="toast-container" id="toastContainer" aria-live="polite"></div>
 
+  <!-- Embedded Server Data for instant client initialization & fallback -->
+  <script id="serverSummaryData" type="application/json">
+    {{ analysis | tojson | safe }}
+  </script>
+  <script id="serverSampleData" type="application/json">
+    {{ sample_records | tojson | safe }}
+  </script>
+
   <script src="{{ url_for('static', filename='js/app.js') }}?v={{ asset_version }}"></script>
 </body>
 </html>
