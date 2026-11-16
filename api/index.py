@@ -22,6 +22,14 @@ flask_app = create_app()
 def app(environ, start_response):
     """Normalize Vercel rewrite paths before dispatching to Flask."""
     qs = environ.get("QUERY_STRING", "")
+
+    # Production debug endpoint to inspect exact Vercel environ headers
+    if "debug_env" in qs or environ.get("PATH_INFO") == "/api/debug_env":
+        start_response("200 OK", [("Content-Type", "application/json")])
+        import json
+        info = {k: str(v) for k, v in environ.items() if k.startswith(("HTTP_", "REQUEST_", "PATH_", "QUERY_", "SCRIPT_", "RAW_", "VERCEL_"))}
+        return [json.dumps(info, indent=2).encode("utf-8")]
+
     params = urllib.parse.parse_qs(qs, keep_blank_values=True)
 
     # 1. Check if the true path was forwarded in query parameter __path__
