@@ -205,10 +205,64 @@ graph TD
 - `3` $\rightarrow$ Dataset Explorer
 - `4` $\rightarrow$ Methodology
 - `5` $\rightarrow$ About
+- `6` $\rightarrow$ Scenario Comparison
 
 ---
 
-## 7. File Directory Structure
+## 7. Extended API Schema Specifications
+
+### A. Scenario Comparison (`POST /api/scenario-compare`)
+**Request Schema:**
+```json
+{
+  "scenario_a": {
+    "smoker": "all | yes | no",
+    "sex": "all | male | female",
+    "region": "all | northeast | northwest | southeast | southwest",
+    "age_min": null | integer,
+    "age_max": null | integer,
+    "bmi_min": null | float,
+    "bmi_max": null | float,
+    "children": "all" | integer
+  },
+  "scenario_b": { ... }
+}
+```
+**Response Schema (200 OK):**
+```json
+{
+  "status": "success",
+  "scenario_a": {
+    "count": 1064,
+    "mean": 8434.27,
+    "median": 7345.41,
+    "min": 1121.87,
+    "max": 36910.61,
+    "std": 5993.78,
+    "has_data": true,
+    "applied_filters": { ... }
+  },
+  "scenario_b": { ... },
+  "comparison": {
+    "difference_mean": 23615.96,
+    "percentage_difference": 280.0,
+    "higher_scenario": "scenario_b",
+    "has_data": true
+  },
+  "warnings": [],
+  "disclaimer": "Empirical subgroup comparison based on historical observational records in dataset (n = 1,338)..."
+}
+```
+
+### B. In-Memory PDF Reporting (`GET /api/report/pdf`)
+- **Method:** `GET`
+- **Response Type:** `application/pdf`
+- **Headers:** `Content-Disposition: attachment; filename=sympsort_executive_report.pdf`
+- **Memory Footprint:** Dynamic streaming via `io.BytesIO` (no permanent disk files).
+
+---
+
+## 8. File Directory Structure
 
 ```text
 SympSort/
@@ -217,51 +271,60 @@ SympSort/
 │   └── insurance_sample.csv         # Academic fallback fixture
 ├── docs/
 │   ├── synopsis.md                  # Detailed laboratory project synopsis
-│   ├── viva_questions.md            # Comprehensive viva examination guide
+│   ├── viva_questions.md            # Comprehensive 33-question viva examination guide
+│   ├── implementation_log.md        # Audit record of all implementation blocks & checks
 │   └── project_timeline.md          # Milestone roadmap
 ├── outputs/
 │   ├── smoker_charges_comparison.png# High-DPI Seaborn barplot output
-│   └── smoker_charges_summary.csv   # Aggregated statistical export
+│   └── smoker_charges_chart.png     # Pre-saved 300 DPI barplot
 ├── static/
 │   ├── css/
-│   │   └── desktop.css              # Linear Dark/Light, glassmorphic styles & animations
+│   │   └── desktop.css              # Calm editorial paper styles, tokens & animations
+│   ├── fonts/                       # Self-hosted Source Serif 4 WOFF2 fonts
 │   ├── img/
 │   │   ├── logo.png                 # Project emblem & identity icon
 │   │   ├── favicon.png              # PNG favicon
 │   │   └── favicon.ico              # Standard Windows/browser icon
 │   └── js/
-│       └── app.js                   # Client SPA router, count-up ticker, dynamic simulator
+│       └── app.js                   # Client SPA router, Explorer filters, Scenario engine
 ├── templates/
-│   └── index.html                   # Semantic HTML5 desktop application layout
+│   ├── index.html                   # Semantic HTML5 desktop application layout (6 views)
+│   └── report_printable.html        # Presentation-grade printable executive report
 ├── tests/
 │   ├── conftest.py                  # Pytest fixtures and mock datasets
-│   ├── test_analysis.py             # Unit tests for Pandas statistical calculations
-│   ├── test_data_validation.py      # Unit tests for CSV ingestion and anomaly handling
-│   └── test_flask_app.py            # Integration tests for Flask routes and JSON APIs
-├── .vscode/
-│   ├── launch.json                  # VS Code debug launcher configuration
-│   ├── settings.json                # Python interpreter and pytest configuration
-│   └── tasks.json                   # One-click build and test tasks
-├── analysis.py                      # Pandas statistical calculation logic
-├── app.py                           # Flask backend and REST API controller
+│   ├── test_analysis.py             # Unit tests for Pandas calculations & pure-Python statistics
+│   ├── test_data_validation.py      # Unit tests for CSV ingestion, null/negative checks
+│   ├── test_flask_app.py            # Integration tests for Flask routes, charts & JSON APIs
+│   ├── test_scenarios.py            # Validation and calculation tests for Scenario Comparison
+│   ├── test_scenario.py             # Additional cohort filter tests
+│   ├── test_explorer.py             # Unit tests for multi-filter Explorer & selection summary
+│   └── test_reporting.py            # Unit tests for ReportLab in-memory PDF & CSV exports
+├── analysis.py                      # Pandas statistical calculation logic & Welch's t-test
+├── app.py                           # Flask backend and production REST API controller
+├── api/
+│   └── index.py                     # Vercel serverless WSGI gateway
 ├── config.py                        # Centralized application constants & palettes
 ├── data_loader.py                   # CSV loading, validation, and cleansing engine
 ├── main.py                          # Universal application entrypoint (Web + CLI)
-├── package.json                     # NPM configuration & dev scripts
+├── reporting.py                     # In-memory executive PDF generation module
+├── scenario_analysis.py             # Two-group empirical cohort comparison engine
 ├── pytest.ini                       # Test suite runner settings
 ├── requirements.txt                 # Pinned Python package dependencies
-├── run.bat                          # Double-click launcher for Windows
+├── run.bat                          # Double-click launcher for Windows CMD
 ├── run.ps1                          # PowerShell launcher
 ├── SCHEMA.md                        # Master architectural schema specification
-└── visualization.py                 # Seaborn & Matplotlib barplot rendering module
+└── visualization.py                 # 7-kind Seaborn & Matplotlib chart engine
 ```
 
 ---
 
-## 8. Verification & Test Suite Specification
+## 9. Verification & Test Suite Specification
 
 The application includes an automated test suite executed via `pytest`:
-- **`tests/test_analysis.py` (5 tests):** Validates grouped mean computations, zero-baseline safety, empty dataset exceptions, missing column errors, and Seaborn figure generation.
-- **`tests/test_data_validation.py` (6 tests):** Validates missing file errors, missing column flags, non-numeric charge coercion, whitespace trimming, and unexpected category logging.
-- **`tests/test_flask_app.py` (7 tests):** Validates HTTP 200 responses, `/api/summary` numerical precision, `/api/chart` PNG payload, pagination logic, search querying, and dataset reloading.
-- **Total:** **18/18 Passing Tests** (`pytest -v`).
+- **`tests/test_analysis.py` (12 tests):** Validates grouped mean computations, Welch's t-test, Mann-Whitney U, Student's t 95% CIs, and Cohen's d ($d \approx 3.16$).
+- **`tests/test_data_validation.py` (11 tests):** Validates missing file errors, missing column flags, non-numeric charge coercion, negative charge rejection, and separate null auditing.
+- **`tests/test_flask_app.py` (26 tests):** Validates HTTP 200 responses, `/api/summary` numerical precision, `/api/chart` PNG payload across 7 kinds, pagination logic, search querying, and dataset reloading.
+- **`tests/test_scenarios.py` & `tests/test_scenario.py` (15 tests):** Validates empirical cohort filtering, strict HTTP 400 validation on inverted bounds, small-sample warnings ($n < 20$), and null metrics on empty subgroups.
+- **`tests/test_explorer.py` (10 tests):** Validates multi-criteria Explorer filters (sex, children, age, BMI), allowlisted sorting, and selection summary over full datasets.
+- **`tests/test_reporting.py` (6 tests):** Validates in-memory PDF generation, CSV downloads, and chart attachments.
+- **Total:** **81/81 Passing Tests** (`pytest -v`).

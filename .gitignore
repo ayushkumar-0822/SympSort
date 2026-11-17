@@ -9,6 +9,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # Streamlit local settings & cache
 .streamlit/
@@ -17,3 +19,10 @@ __pycache__/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Output artifacts (retain .gitkeep, ignore generated images)
+outputs/*.png
+!outputs/.gitkeep
+
+# Packaging archives
+*.zip

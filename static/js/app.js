@@ -61,12 +61,17 @@
     summary: null,
     hasAnimatedNumbers: false,
     dataQualityLoaded: false,
+    scenarioLoaded: false,
     explorer: {
       page: 1,
       pageSize: 15,
       search: "",
       smoker: "",
       region: "",
+      sex: "",
+      children: "",
+      bmi: "",
+      age: "",
       sort: "",
       order: "asc",
       totalFiltered: 0,
@@ -145,11 +150,71 @@
     profileMatchRange: document.getElementById("profileMatchRange"),
     profileWarning: document.getElementById("profileWarning"),
 
+    // Scenario Comparison Elements
+    scenMeanA: document.getElementById("scenMeanA"),
+    scenCountA: document.getElementById("scenCountA"),
+    scenMedianA: document.getElementById("scenMedianA"),
+    scenCiA: document.getElementById("scenCiA"),
+    scenMeanB: document.getElementById("scenMeanB"),
+    scenCountB: document.getElementById("scenCountB"),
+    scenMedianB: document.getElementById("scenMedianB"),
+    scenCiB: document.getElementById("scenCiB"),
+    scenDiffMean: document.getElementById("scenDiffMean"),
+    scenPctBadge: document.getElementById("scenPctBadge"),
+    scenMultiplier: document.getElementById("scenMultiplier"),
+    scenTStat: document.getElementById("scenTStat"),
+    scenStatement: document.getElementById("scenStatement"),
+    scenWarning: document.getElementById("scenWarning"),
+
+    // Scenario Comparison (View 6)
+    scenA_smoker: document.getElementById("scenA_smoker"),
+    scenA_sex: document.getElementById("scenA_sex"),
+    scenA_region: document.getElementById("scenA_region"),
+    scenA_age_min: document.getElementById("scenA_age_min"),
+    scenA_age_max: document.getElementById("scenA_age_max"),
+    scenA_bmi_min: document.getElementById("scenA_bmi_min"),
+    scenA_bmi_max: document.getElementById("scenA_bmi_max"),
+    scenA_children: document.getElementById("scenA_children"),
+
+    scenB_smoker: document.getElementById("scenB_smoker"),
+    scenB_sex: document.getElementById("scenB_sex"),
+    scenB_region: document.getElementById("scenB_region"),
+    scenB_age_min: document.getElementById("scenB_age_min"),
+    scenB_age_max: document.getElementById("scenB_age_max"),
+    scenB_bmi_min: document.getElementById("scenB_bmi_min"),
+    scenB_bmi_max: document.getElementById("scenB_bmi_max"),
+    scenB_children: document.getElementById("scenB_children"),
+
+    scenCompareRunBtn: document.getElementById("scenCompareRunBtn"),
+    scenCompareResetBtn: document.getElementById("scenCompareResetBtn"),
+    scenStatusIndicator: document.getElementById("scenStatusIndicator"),
+    scenDiffCard: document.getElementById("scenDiffCard"),
+    scenDiffAmount: document.getElementById("scenDiffAmount"),
+    scenDiffPctBadge: document.getElementById("scenDiffPctBadge"),
+    scenHigherBadge: document.getElementById("scenHigherBadge"),
+    scenWarningBox: document.getElementById("scenWarningBox"),
+    scenWarningText: document.getElementById("scenWarningText"),
+    scenStatsACount: document.getElementById("scenStatsACount"),
+    scenStatsAMean: document.getElementById("scenStatsAMean"),
+    scenStatsAMedian: document.getElementById("scenStatsAMedian"),
+    scenStatsARange: document.getElementById("scenStatsARange"),
+    scenStatsAStd: document.getElementById("scenStatsAStd"),
+    scenStatsBCount: document.getElementById("scenStatsBCount"),
+    scenStatsBMean: document.getElementById("scenStatsBMean"),
+    scenStatsBMedian: document.getElementById("scenStatsBMedian"),
+    scenStatsBRange: document.getElementById("scenStatsBRange"),
+    scenStatsBStd: document.getElementById("scenStatsBStd"),
+    scenDisclaimerText: document.getElementById("scenDisclaimerText"),
+
     // Explorer
     explorerSearch: document.getElementById("explorerSearch"),
     smokerFilter: document.getElementById("smokerFilter"),
     smokerPills: document.getElementById("smokerPills"),
     regionFilter: document.getElementById("regionFilter"),
+    sexFilter: document.getElementById("sexFilter"),
+    childrenFilter: document.getElementById("childrenFilter"),
+    bmiFilter: document.getElementById("bmiFilter"),
+    ageFilter: document.getElementById("ageFilter"),
     resetFiltersBtn: document.getElementById("resetFiltersBtn"),
     selectionSummaryStrip: document.getElementById("selectionSummaryStrip"),
     selCount: document.getElementById("selCount"),
@@ -472,6 +537,7 @@
     explorer: "Dataset Explorer",
     methodology: "Methodology",
     about: "About",
+    scenario: "Scenario Comparison",
   };
 
   function switchView(viewName, updateHash = true) {
@@ -539,6 +605,9 @@
     }
     if (viewName === "methodology" && !state.dataQualityLoaded) {
       loadDataQualityAudit();
+    }
+    if (viewName === "scenario" && !state.scenarioLoaded) {
+      runScenarioComparison();
     }
   }
 
@@ -869,6 +938,10 @@
     if (state.explorer.search) params.set("search", state.explorer.search);
     if (state.explorer.smoker) params.set("smoker", state.explorer.smoker);
     if (state.explorer.region) params.set("region", state.explorer.region);
+    if (state.explorer.sex) params.set("sex", state.explorer.sex);
+    if (state.explorer.children) params.set("children", state.explorer.children);
+    if (state.explorer.bmi) params.set("bmi_band", state.explorer.bmi);
+    if (state.explorer.age) params.set("age_band", state.explorer.age);
     if (state.explorer.sort) params.set("sort", state.explorer.sort);
     if (state.explorer.order) params.set("order", state.explorer.order);
 
@@ -887,6 +960,10 @@
         if (state.explorer.search) downloadParams.set("search", state.explorer.search);
         if (state.explorer.smoker) downloadParams.set("smoker", state.explorer.smoker);
         if (state.explorer.region) downloadParams.set("region", state.explorer.region);
+        if (state.explorer.sex) downloadParams.set("sex", state.explorer.sex);
+        if (state.explorer.children) downloadParams.set("children", state.explorer.children);
+        if (state.explorer.bmi) downloadParams.set("bmi_band", state.explorer.bmi);
+        if (state.explorer.age) downloadParams.set("age_band", state.explorer.age);
         if (state.explorer.sort) downloadParams.set("sort", state.explorer.sort);
         if (state.explorer.order) downloadParams.set("order", state.explorer.order);
         elements.downloadFilteredLink.href = `/api/download/filtered?${downloadParams.toString()}`;
@@ -1101,50 +1178,278 @@
     }
   }
 
-  // ── Compare a Profile Empirical Lookup Tool ────────────────────────────
-  async function updateProfileMatch() {
-    const age = elements.profileAge ? elements.profileAge.value : "all";
-    const bmi = elements.profileBmi ? elements.profileBmi.value : "all";
-    const sex = elements.profileSex ? elements.profileSex.value : "all";
-    const region = elements.profileRegion ? elements.profileRegion.value : "all";
-    const smoker = elements.profileSmoker ? elements.profileSmoker.value : "all";
+  // ── Scenario Comparison Engine Controller ───────────────────────────────
+  async function updateScenarioComparison() {
+    const aParams = {
+      age_band: elements.profileAge ? elements.profileAge.value : "all",
+      bmi_band: elements.profileBmi ? elements.profileBmi.value : "all",
+      sex: elements.profileSex ? elements.profileSex.value : "all",
+      region: elements.profileRegion ? elements.profileRegion.value : "all",
+      smoker: elements.profileSmoker ? elements.profileSmoker.value : "no",
+    };
+
+    const bAgeEl = document.getElementById("scenarioB_age");
+    const bBmiEl = document.getElementById("scenarioB_bmi");
+    const bSexEl = document.getElementById("scenarioB_sex");
+    const bRegionEl = document.getElementById("scenarioB_region");
+    const bSmokerEl = document.getElementById("scenarioB_smoker");
+
+    const bParams = {
+      age_band: bAgeEl ? bAgeEl.value : "all",
+      bmi_band: bBmiEl ? bBmiEl.value : "all",
+      sex: bSexEl ? bSexEl.value : "all",
+      region: bRegionEl ? bRegionEl.value : "all",
+      smoker: bSmokerEl ? bSmokerEl.value : "yes",
+    };
 
     try {
-      const params = new URLSearchParams({
-        age_band: age,
-        bmi_band: bmi,
-        sex: sex,
-        region: region,
-        smoker: smoker,
+      const q = new URLSearchParams({
+        a_age_band: aParams.age_band,
+        a_bmi_band: aParams.bmi_band,
+        a_sex: aParams.sex,
+        a_region: aParams.region,
+        a_smoker: aParams.smoker,
+        b_age_band: bParams.age_band,
+        b_bmi_band: bParams.bmi_band,
+        b_sex: bParams.sex,
+        b_region: bParams.region,
+        b_smoker: bParams.smoker,
       });
-      const res = await fetch(`/api/profile-match?${params.toString()}`);
+
+      const res = await fetch(`/api/scenario-compare?${q.toString()}`);
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data = await res.json();
 
-      if (elements.profileMatchCount) {
-        elements.profileMatchCount.textContent = NUMBER.format(data.count);
+      // Update Cohort A
+      const cA = data.cohort_a || {};
+      if (elements.scenMeanA) elements.scenMeanA.textContent = cA.count > 0 ? CURRENCY.format(cA.mean) : "—";
+      if (elements.scenCountA) elements.scenCountA.textContent = `n = ${NUMBER.format(cA.count)} records`;
+      if (elements.scenMedianA) elements.scenMedianA.textContent = cA.count > 0 ? CURRENCY.format(cA.median) : "—";
+      if (elements.scenCiA) elements.scenCiA.textContent = cA.ci_margin > 0 ? `±${CURRENCY.format(cA.ci_margin)}` : "—";
+
+      // Update Cohort B
+      const cB = data.cohort_b || {};
+      if (elements.scenMeanB) elements.scenMeanB.textContent = cB.count > 0 ? CURRENCY.format(cB.mean) : "—";
+      if (elements.scenCountB) elements.scenCountB.textContent = `n = ${NUMBER.format(cB.count)} records`;
+      if (elements.scenMedianB) elements.scenMedianB.textContent = cB.count > 0 ? CURRENCY.format(cB.median) : "—";
+      if (elements.scenCiB) elements.scenCiB.textContent = cB.ci_margin > 0 ? `±${CURRENCY.format(cB.ci_margin)}` : "—";
+
+      // Update Delta Box
+      if (elements.scenDiffMean) {
+        const sign = data.diff_mean >= 0 ? "+" : "";
+        elements.scenDiffMean.textContent = `${sign}${CURRENCY.format(data.diff_mean)}`;
       }
-      if (data.count > 0) {
-        if (elements.profileMatchMean) elements.profileMatchMean.textContent = CURRENCY.format(data.mean);
-        if (elements.profileMatchMedian) elements.profileMatchMedian.textContent = CURRENCY.format(data.median);
-        if (elements.profileMatchRange) elements.profileMatchRange.textContent = `${CURRENCY.format(data.min)} – ${CURRENCY.format(data.max)}`;
-      } else {
-        if (elements.profileMatchMean) elements.profileMatchMean.textContent = "—";
-        if (elements.profileMatchMedian) elements.profileMatchMedian.textContent = "—";
-        if (elements.profileMatchRange) elements.profileMatchRange.textContent = "—";
+      if (elements.scenPctBadge) {
+        const sign = data.pct_diff >= 0 ? "+" : "";
+        elements.scenPctBadge.textContent = `${sign}${data.pct_diff.toFixed(1)}%`;
+      }
+      if (elements.scenMultiplier) {
+        elements.scenMultiplier.textContent = `${data.multiplier ? data.multiplier.toFixed(2) : "1.00"}×`;
+      }
+      if (elements.scenTStat) {
+        if (data.t_statistic !== null) {
+          elements.scenTStat.textContent = `t = ${data.t_statistic.toFixed(2)}, ${data.p_value}`;
+        } else {
+          elements.scenTStat.textContent = "t = N/A";
+        }
+      }
+      if (elements.scenStatement && data.statement) {
+        elements.scenStatement.textContent = data.statement;
       }
 
-      if (elements.profileWarning) {
-        if (data.warning) {
-          elements.profileWarning.textContent = data.warning;
-          elements.profileWarning.classList.remove("hidden");
+      if (elements.scenWarning) {
+        if (data.warnings && data.warnings.length > 0) {
+          elements.scenWarning.textContent = data.warnings.join(" ");
+          elements.scenWarning.classList.remove("hidden");
         } else {
-          elements.profileWarning.classList.add("hidden");
+          elements.scenWarning.classList.add("hidden");
         }
       }
     } catch (err) {
-      loggerError("Profile match lookup failed:", err);
+      loggerError("Scenario comparison calculation failed:", err);
     }
+  }
+
+  const updateProfileMatch = updateScenarioComparison;
+
+  // ── Scenario Comparison (View 6) Controller ─────────────────────────────
+  function serializeScenarioCohort(prefix) {
+    const smokerEl = elements[`${prefix}_smoker`];
+    const sexEl = elements[`${prefix}_sex`];
+    const regionEl = elements[`${prefix}_region`];
+    const ageMinEl = elements[`${prefix}_age_min`];
+    const ageMaxEl = elements[`${prefix}_age_max`];
+    const bmiMinEl = elements[`${prefix}_bmi_min`];
+    const bmiMaxEl = elements[`${prefix}_bmi_max`];
+    const childrenEl = elements[`${prefix}_children`];
+
+    const parseNum = (el, isFloat = false) => {
+      if (!el || !el.value || el.value.trim() === "") return null;
+      const parsed = isFloat ? parseFloat(el.value.trim()) : parseInt(el.value.trim(), 10);
+      return isNaN(parsed) ? null : parsed;
+    };
+
+    const parseChildren = (el) => {
+      if (!el || !el.value || el.value === "all") return "all";
+      const parsed = parseInt(el.value, 10);
+      return isNaN(parsed) ? "all" : parsed;
+    };
+
+    return {
+      smoker: smokerEl ? smokerEl.value : "all",
+      sex: sexEl ? sexEl.value : "all",
+      region: regionEl ? regionEl.value : "all",
+      age_min: parseNum(ageMinEl, false),
+      age_max: parseNum(ageMaxEl, false),
+      bmi_min: parseNum(bmiMinEl, true),
+      bmi_max: parseNum(bmiMaxEl, true),
+      children: parseChildren(childrenEl),
+    };
+  }
+
+  async function runScenarioComparison() {
+    if (!elements.scenCompareRunBtn) return;
+
+    const payloadA = serializeScenarioCohort("scenA");
+    const payloadB = serializeScenarioCohort("scenB");
+
+    elements.scenCompareRunBtn.disabled = true;
+    if (elements.scenStatusIndicator) {
+      elements.scenStatusIndicator.textContent = "Calculating comparison…";
+    }
+
+    try {
+      const res = await fetch("/api/scenario-compare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scenario_a: payloadA,
+          scenario_b: payloadB,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const msg = data.message || `Calculation error (${res.status})`;
+        if (elements.scenWarningBox && elements.scenWarningText) {
+          elements.scenWarningText.textContent = msg;
+          elements.scenWarningBox.classList.remove("hidden");
+        }
+        showToast(msg);
+        return;
+      }
+
+      state.scenarioLoaded = true;
+
+      // Render Scenario A metrics
+      const a = data.scenario_a || {};
+      if (elements.scenStatsACount) elements.scenStatsACount.textContent = a.count !== undefined ? NUMBER.format(a.count) : "0";
+      if (elements.scenStatsAMean) elements.scenStatsAMean.textContent = a.mean !== null && a.mean !== undefined ? CURRENCY.format(a.mean) : "—";
+      if (elements.scenStatsAMedian) elements.scenStatsAMedian.textContent = a.median !== null && a.median !== undefined ? CURRENCY.format(a.median) : "—";
+      if (elements.scenStatsARange) {
+        elements.scenStatsARange.textContent = (a.min !== null && a.max !== null && a.min !== undefined && a.max !== undefined)
+          ? `${CURRENCY.format(a.min)} – ${CURRENCY.format(a.max)}`
+          : "—";
+      }
+      if (elements.scenStatsAStd) elements.scenStatsAStd.textContent = a.std !== null && a.std !== undefined ? CURRENCY.format(a.std) : "—";
+
+      // Render Scenario B metrics
+      const b = data.scenario_b || {};
+      if (elements.scenStatsBCount) elements.scenStatsBCount.textContent = b.count !== undefined ? NUMBER.format(b.count) : "0";
+      if (elements.scenStatsBMean) elements.scenStatsBMean.textContent = b.mean !== null && b.mean !== undefined ? CURRENCY.format(b.mean) : "—";
+      if (elements.scenStatsBMedian) elements.scenStatsBMedian.textContent = b.median !== null && b.median !== undefined ? CURRENCY.format(b.median) : "—";
+      if (elements.scenStatsBRange) {
+        elements.scenStatsBRange.textContent = (b.min !== null && b.max !== null && b.min !== undefined && b.max !== undefined)
+          ? `${CURRENCY.format(b.min)} – ${CURRENCY.format(b.max)}`
+          : "—";
+      }
+      if (elements.scenStatsBStd) elements.scenStatsBStd.textContent = b.std !== null && b.std !== undefined ? CURRENCY.format(b.std) : "—";
+
+      // Render Comparative Difference
+      const comp = data.comparison || {};
+      if (elements.scenDiffAmount) {
+        if (comp.difference_mean !== null && comp.difference_mean !== undefined) {
+          const sign = comp.difference_mean > 0 ? "+" : "";
+          elements.scenDiffAmount.textContent = `${sign}${CURRENCY.format(comp.difference_mean)}`;
+        } else {
+          elements.scenDiffAmount.textContent = "—";
+        }
+      }
+
+      if (elements.scenDiffPctBadge) {
+        if (comp.percentage_difference !== null && comp.percentage_difference !== undefined) {
+          const sign = comp.percentage_difference > 0 ? "+" : "";
+          elements.scenDiffPctBadge.textContent = `${sign}${comp.percentage_difference.toFixed(1)}%`;
+        } else {
+          elements.scenDiffPctBadge.textContent = "—";
+        }
+      }
+
+      if (elements.scenHigherBadge) {
+        if (comp.higher_scenario === "scenario_b") {
+          elements.scenHigherBadge.textContent = "Scenario B is higher";
+          elements.scenHigherBadge.className = "higher-badge";
+        } else if (comp.higher_scenario === "scenario_a") {
+          elements.scenHigherBadge.textContent = "Scenario A is higher";
+          elements.scenHigherBadge.className = "higher-badge higher-badge--a";
+        } else {
+          elements.scenHigherBadge.textContent = "Means are identical or undefined";
+          elements.scenHigherBadge.className = "higher-badge higher-badge--equal";
+        }
+      }
+
+      // Warnings
+      if (elements.scenWarningBox && elements.scenWarningText) {
+        if (data.warnings && data.warnings.length > 0) {
+          elements.scenWarningText.textContent = data.warnings.join(" ");
+          elements.scenWarningBox.classList.remove("hidden");
+        } else {
+          elements.scenWarningBox.classList.add("hidden");
+        }
+      }
+
+      // Disclaimer
+      if (elements.scenDisclaimerText && data.disclaimer) {
+        elements.scenDisclaimerText.textContent = data.disclaimer;
+      }
+    } catch (err) {
+      loggerError("Scenario comparison failed:", err);
+      if (elements.scenWarningBox && elements.scenWarningText) {
+        elements.scenWarningText.textContent = "Network or server failure during scenario comparison calculation.";
+        elements.scenWarningBox.classList.remove("hidden");
+      }
+      showToast("Unable to calculate scenario comparison.");
+    } finally {
+      elements.scenCompareRunBtn.disabled = false;
+      if (elements.scenStatusIndicator) {
+        elements.scenStatusIndicator.textContent = "";
+      }
+    }
+  }
+
+  function resetScenarioInputs() {
+    // Reset Scenario A
+    if (elements.scenA_smoker) elements.scenA_smoker.value = "no";
+    if (elements.scenA_sex) elements.scenA_sex.value = "all";
+    if (elements.scenA_region) elements.scenA_region.value = "all";
+    if (elements.scenA_age_min) elements.scenA_age_min.value = "";
+    if (elements.scenA_age_max) elements.scenA_age_max.value = "";
+    if (elements.scenA_bmi_min) elements.scenA_bmi_min.value = "";
+    if (elements.scenA_bmi_max) elements.scenA_bmi_max.value = "";
+    if (elements.scenA_children) elements.scenA_children.value = "all";
+
+    // Reset Scenario B
+    if (elements.scenB_smoker) elements.scenB_smoker.value = "yes";
+    if (elements.scenB_sex) elements.scenB_sex.value = "all";
+    if (elements.scenB_region) elements.scenB_region.value = "all";
+    if (elements.scenB_age_min) elements.scenB_age_min.value = "";
+    if (elements.scenB_age_max) elements.scenB_age_max.value = "";
+    if (elements.scenB_bmi_min) elements.scenB_bmi_min.value = "";
+    if (elements.scenB_bmi_max) elements.scenB_bmi_max.value = "";
+    if (elements.scenB_children) elements.scenB_children.value = "all";
+
+    runScenarioComparison();
   }
 
   // ── Methodology Data Quality & Ingestion Audit ─────────────────────────
@@ -1229,7 +1534,7 @@
     // Hash navigation
     window.addEventListener("hashchange", handleHashChange);
 
-    // Keyboard shortcuts (1–5)
+    // Keyboard shortcuts (1–6)
     window.addEventListener("keydown", (e) => {
       if (e.target && ["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) return;
       const keyMap = {
@@ -1238,6 +1543,7 @@
         "3": "explorer",
         "4": "methodology",
         "5": "about",
+        "6": "scenario",
       };
       if (keyMap[e.key]) {
         e.preventDefault();
@@ -1380,6 +1686,42 @@
       });
     }
 
+    // Explorer sex filter
+    if (elements.sexFilter) {
+      elements.sexFilter.addEventListener("change", (e) => {
+        state.explorer.sex = e.target.value;
+        state.explorer.page = 1;
+        loadExplorerData();
+      });
+    }
+
+    // Explorer children filter
+    if (elements.childrenFilter) {
+      elements.childrenFilter.addEventListener("change", (e) => {
+        state.explorer.children = e.target.value;
+        state.explorer.page = 1;
+        loadExplorerData();
+      });
+    }
+
+    // Explorer BMI filter
+    if (elements.bmiFilter) {
+      elements.bmiFilter.addEventListener("change", (e) => {
+        state.explorer.bmi = e.target.value;
+        state.explorer.page = 1;
+        loadExplorerData();
+      });
+    }
+
+    // Explorer Age filter
+    if (elements.ageFilter) {
+      elements.ageFilter.addEventListener("change", (e) => {
+        state.explorer.age = e.target.value;
+        state.explorer.page = 1;
+        loadExplorerData();
+      });
+    }
+
     // Explorer page size
     if (elements.pageSize) {
       elements.pageSize.addEventListener("change", (e) => {
@@ -1421,18 +1763,18 @@
       });
     }
 
-    // Profile Compare dropdowns
-    [
-      elements.profileAge,
-      elements.profileBmi,
-      elements.profileSex,
-      elements.profileRegion,
-      elements.profileSmoker,
-    ].forEach((sel) => {
-      if (sel) {
-        sel.addEventListener("change", updateProfileMatch);
-      }
+    // Scenario Comparison inputs
+    document.querySelectorAll(".scenario-input").forEach((sel) => {
+      sel.addEventListener("change", updateScenarioComparison);
     });
+
+    // Scenario Comparison (View 6) actions
+    if (elements.scenCompareRunBtn) {
+      elements.scenCompareRunBtn.addEventListener("click", runScenarioComparison);
+    }
+    if (elements.scenCompareResetBtn) {
+      elements.scenCompareResetBtn.addEventListener("click", resetScenarioInputs);
+    }
 
     // Explorer smoker pills
     if (elements.smokerPills) {
@@ -1457,7 +1799,15 @@
       elements.resetFiltersBtn.addEventListener("click", () => {
         if (elements.explorerSearch) elements.explorerSearch.value = "";
         if (elements.regionFilter) elements.regionFilter.value = "";
+        if (elements.sexFilter) elements.sexFilter.value = "";
+        if (elements.childrenFilter) elements.childrenFilter.value = "";
+        if (elements.bmiFilter) elements.bmiFilter.value = "";
+        if (elements.ageFilter) elements.ageFilter.value = "";
         if (elements.smokerFilter) elements.smokerFilter.value = "";
+        state.explorer.sex = "";
+        state.explorer.children = "";
+        state.explorer.bmi = "";
+        state.explorer.age = "";
         if (elements.smokerPills) {
           elements.smokerPills.querySelectorAll(".smoker-pill").forEach((p, idx) => {
             const isFirst = idx === 0;

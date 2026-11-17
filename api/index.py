@@ -34,6 +34,22 @@ class VercelPathMiddleware:
         # 1. Check if the true path was forwarded in query parameter __path__
         if "__path__" in params:
             target = params.pop("__path__")[0]
+            if "?" in target:
+                target_path, target_qs = target.split("?", 1)
+                extra_params = urllib.parse.parse_qs(target_qs, keep_blank_values=True)
+                for k, v in extra_params.items():
+                    params.setdefault(k, []).extend(v)
+                target = target_path
+
+            if not target or target in ("/api/index", "/api/index.py"):
+                target = "/"
+            elif not target.startswith("/"):
+                target = "/" + target
+
+            # Collapse any redundant double slashes
+            while "//" in target:
+                target = target.replace("//", "/")
+
             environ["PATH_INFO"] = target
             environ["QUERY_STRING"] = urllib.parse.urlencode(params, doseq=True)
         # 2. Check if Vercel passed original path in standard proxy/edge headers
@@ -54,20 +70,18 @@ class VercelPathMiddleware:
             else:
                 environ["PATH_INFO"] = "/"
 
-        def custom_start_response(status, headers, exc_info=None):
-            headers.append(("X-Environ-Orig-Path", str(orig_path)))
-            headers.append(("X-Environ-Matched-Path", str(matched_path)))
-            headers.append(("X-Environ-Final-Path", str(environ.get("PATH_INFO"))))
-            headers.append(("X-Environ-Final-Query", str(environ.get("QUERY_STRING"))))
-            return start_response(status, headers, exc_info)
-
         try:
-            return self.wsgi_app(environ, custom_start_response)
+            return self.wsgi_app(environ, start_response)
         except Exception as exc:
             import traceback
             tb = traceback.format_exc()
-            start_response("500 Internal Server Error", [("Content-Type", "text/plain; charset=utf-8")])
-            return [f"FLASK ERROR:\n{tb}".encode("utf-8")]
+            sys.stderr.write(f"Vercel Serverless WSGI Error:\n{tb}\n")
+            sys.stderr.flush()
+            start_response(
+                "500 Internal Server Error",
+                [("Content-Type", "text/plain; charset=utf-8")],
+            )
+            return [b"Internal Server Error"]
 
 
 # Initialize Flask app and attach middleware

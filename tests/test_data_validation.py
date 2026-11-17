@@ -152,3 +152,75 @@ def test_csv_headers_only(tmp_path):
     _, _, report = load_dataset(csv_path)
 
     assert report.is_valid is False
+
+
+# ── 9. Distinguish missing vs. non-numeric charges ───────────────────────
+
+def test_distinguish_null_vs_non_numeric_charges(tmp_path):
+    """Validation report cleanly separates null charges from string/malformed charges."""
+    csv_path = tmp_path / "mixed_bad_charges.csv"
+    csv_content = (
+        "smoker,charges,age,sex,bmi,children,region\n"
+        "yes,,25,female,22.0,0,southwest\n"            # null charge
+        "no,invalid_str,30,male,25.0,1,southeast\n"    # non-numeric charge
+        "yes,15000.50,35,female,28.0,0,northwest\n"   # valid
+    )
+    csv_path.write_text(csv_content)
+
+    df_valid, _, report = load_dataset(csv_path)
+
+    assert report.is_valid is True
+    assert report.null_charges_count == 1
+    assert report.non_numeric_charges_count == 1
+    assert len(df_valid) == 1
+    assert abs(df_valid.iloc[0]["charges"] - 15000.50) < 0.01
+
+
+# ── 10. Reject negative charges ──────────────────────────────────────────
+
+def test_reject_negative_charges(tmp_path):
+    """Negative insurance charges must be flagged and excluded from valid records."""
+    csv_path = tmp_path / "negative_charges.csv"
+    df = pd.DataFrame({
+        "smoker": ["yes", "no", "yes"],
+        "charges": [12000.0, -500.0, 18000.0],
+        "age": [25, 30, 35],
+        "sex": ["male", "female", "male"],
+        "bmi": [24.0, 26.0, 28.0],
+        "children": [0, 1, 2],
+        "region": ["southwest", "southeast", "northwest"],
+    })
+    df.to_csv(csv_path, index=False)
+
+    df_valid, _, report = load_dataset(csv_path)
+
+    assert report.is_valid is True
+    assert report.negative_charges_count == 1
+    assert len(df_valid) == 2
+    assert (df_valid["charges"] >= 0).all()
+
+
+# ── 11. Demographic column validation ────────────────────────────────────
+
+def test_demographic_validation_report(tmp_path):
+    """Demographic ranges (age, bmi, sex, region, children) are validated in report."""
+    csv_path = tmp_path / "demographics.csv"
+    df = pd.DataFrame({
+        "smoker": ["no", "yes"],
+        "charges": [5000.0, 25000.0],
+        "age": [30, 150],  # 150 exceeds MAX_AGE (120)
+        "sex": ["female", "alien"],  # alien invalid sex
+        "bmi": [24.5, 150.0],  # 150 exceeds MAX_BMI (100)
+        "children": [1, 25],  # 25 exceeds MAX_CHILDREN (20)
+        "region": ["northwest", "mars"],  # mars invalid region
+    })
+    df.to_csv(csv_path, index=False)
+
+    _, _, report = load_dataset(csv_path)
+
+    assert report.demographic_validation is not None
+    assert report.demographic_validation["age"]["invalid"] == 1
+    assert report.demographic_validation["sex"]["invalid"] == 1
+    assert report.demographic_validation["bmi"]["invalid"] == 1
+    assert report.demographic_validation["children"]["invalid"] == 1
+    assert report.demographic_validation["region"]["invalid"] == 1

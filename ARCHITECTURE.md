@@ -18,11 +18,13 @@
 | Layer | Component | Version | Purpose |
 |---|---|---|---|
 | **Data Ingestion** | Python / Pandas | 3.13 / >=2.0.0 | CSV parsing, error coercion, column normalization |
-| **Statistical Engine**| Pandas | >=2.0.0 | `df.groupby('smoker')['charges'].mean()` |
-| **Visualization** | Seaborn / Matplotlib | >=0.12.0 / >=3.7.0 | `sns.barplot` with 95% CI error bars and direct labels |
+| **Statistical Engine**| Pandas | >=2.0.0 | `df.groupby('smoker')['charges'].mean()`, Welch's t-test, Mann-Whitney U |
+| **Scenario Engine**| Python / Pandas | >=2.0.0 | Two-group empirical cohort comparison with strict range validation |
+| **Reporting Engine**| ReportLab | >=4.0.0 | In-memory publication-grade PDF generation (`io.BytesIO`) |
+| **Visualization** | Seaborn / Matplotlib | >=0.12.0 / >=3.7.0 | `sns.barplot` (and 6 additional chart views) with 95% CI error bars |
 | **Backend Web Server**| Flask | >=3.0.0 | REST JSON APIs, relative-route asset serving, dynamic PNG streaming |
-| **Frontend UI** | HTML5 / CSS3 / Vanilla JS | ES6+ | SPA with 5 client views, hash routing, zero CDN dependencies |
-| **Automated Testing** | Pytest | >=7.0.0 | 30 unit & integration tests covering data loader, analysis, Flask routes |
+| **Frontend UI** | HTML5 / CSS3 / Vanilla JS | ES6+ | SPA with 6 client views, hash routing, zero CDN dependencies |
+| **Automated Testing** | Pytest | >=7.0.0 | 81 unit & integration tests covering loader, analysis, scenarios, explorer, reporting |
 
 ---
 
@@ -31,37 +33,47 @@
 SympSort/
 ├── config.py              # Central constants, file paths, palettes, chart DPI settings
 ├── data_loader.py         # CSV loading, validation, cleaning, and ValidationReport
-├── analysis.py            # Pandas groupby computation, moments, SmokerAnalysisResult
-├── visualization.py       # Seaborn barplot rendering (Light/Dark themes), PNG byte generation
-├── app.py                 # Flask factory (create_app), REST endpoints, cache management
+├── analysis.py            # Pandas groupby computation, moments, SmokerAnalysisResult, Welch t, Cohen's d
+├── scenario_analysis.py   # Two-group empirical cohort comparison engine with strict validation
+├── reporting.py           # In-memory ReportLab executive PDF generator (zero disk writes)
+├── visualization.py       # 7-kind Seaborn/Matplotlib chart engine (Light/Dark themes), PNG byte generation
+├── app.py                 # Flask factory (create_app), REST endpoints, production error handling
 ├── main.py                # Application entrypoint: CLI runner (--cli) and desktop server runner
+├── api/
+│   └── index.py           # Vercel serverless WSGI entrypoint with path-rewriting middleware
 ├── requirements.txt       # Pinned dependencies
 ├── pytest.ini             # Test runner configuration
 ├── run.bat / run.ps1      # Native OS launchers
 ├── ARCHITECTURE.md        # Master architectural and implementation specification
 ├── PRD.md                 # Product requirements and verification matrix
-├── SCHEMA.md              # Original lab schema specification
+├── SCHEMA.md              # JSON and dataset schema specifications
 ├── data/
 │   ├── insurance.csv      # Real Kaggle dataset (1,338 rows)
 │   └── insurance_sample.csv # 50-row fallback fixture
 ├── outputs/
 │   ├── smoker_charges_comparison.png # 300 DPI high-resolution export
-│   └── smoker_charges_summary.csv    # Summary aggregation export
+│   └── smoker_charges_chart.png      # 300 DPI barplot export
 ├── templates/
-│   └── index.html         # Single-page application shell (5 distinct views)
+│   ├── index.html         # Single-page application shell (6 distinct views)
+│   └── report_printable.html # Presentation-grade printable executive report for PDF export
 ├── static/
 │   ├── css/
 │   │   └── desktop.css    # Calm editorial styling, design tokens, light/dark themes
 │   ├── js/
-│   │   └── app.js         # Client router, table renderer, accessible sorting, theme sync
+│   │   └── app.js         # Client router, table renderer, scenario comparison engine
+│   ├── fonts/             # Self-hosted Source Serif 4 (Roman and Italic WOFF2)
 │   └── img/
 │       ├── logo.png       # Project emblem
-│       └── favicon.ico    # Standard favicon
+│       └── favicon.png    # High-res favicon
 └── tests/
     ├── conftest.py        # Shared pytest fixtures (mock DataFrames, Flask test client)
-    ├── test_analysis.py   # Unit tests for Pandas grouped mean calculations and math
+    ├── test_analysis.py   # Unit tests for Pandas grouped mean calculations and statistics
     ├── test_data_validation.py # Unit tests for CSV ingestion, coercion, missing columns
-    └── test_flask_app.py  # Integration tests for HTTP 200, JSON structure, PNG streaming
+    ├── test_flask_app.py  # Integration tests for HTTP 200, JSON structure, PNG streaming
+    ├── test_scenario.py   # Unit tests for multi-parameter scenario comparison engine
+    ├── test_scenarios.py  # Strict HTTP 400 validation and JSON safety tests
+    ├── test_explorer.py   # Unit tests for multi-criteria Explorer filters & pagination
+    └── test_reporting.py  # Unit tests for in-memory PDF generation & CSV exports
 ```
 
 ---
@@ -71,25 +83,43 @@ SympSort/
 [data/insurance.csv]
        │
        ▼
-[data_loader.py] ───► Coerces charges to float64, trims & validates smoker values
+[data_loader.py] ──────► Coerces charges to float64, trims & validates smoker values
        │
-       ├──► ValidationReport (valid_rows, excluded_rows, warnings)
+       ├──► ValidationReport (valid_rows, excluded_rows, demographic report)
        ▼
-[analysis.py] ──────► df.groupby('smoker')['charges'].mean()
-       │
-       ├──► SmokerAnalysisResult (means, medians, std, min, max, multiplier)
+[analysis.py] ─────────► df.groupby('smoker')['charges'].mean()
+       │               Pure-Python Welch's t-test, Mann-Whitney U, Cohen's d (3.16)
+       │               Student's t 95% Confidence Intervals
+       ├──► SmokerAnalysisResult
        ▼
-[visualization.py] ─► sns.barplot (95% CI error bars, exact dollar annotations)
-       │
-       ├──► Cached PNG bytes (Light theme #FAF8F4 / Dark theme #1E1F22)
+[scenario_analysis.py] ─► Validates Scenario A & B inputs (age, bmi, sex, region, smoker, children)
+       │               Computes subgroup empirical count, mean, median, min, max, std
+       │               Computes delta mean, relative shift, higher badge, small-sample warnings
        ▼
-[app.py] ───────────► Serves JSON endpoints & relative-path assets to Client
+[reporting.py] ────────► Compiles executive PDF in memory via ReportLab (io.BytesIO)
+       │               Embeds Seaborn barplot, methodology, comparison table, limitations
+       ▼
+[visualization.py] ────► Seaborn 7-view charts (bar, dist, box, scatter, region, sex, age)
+       │               Cached PNG bytes (Light theme #F6F3EC / Dark theme #16171A)
+       ▼
+[app.py] ──────────────► Serves JSON endpoints, static assets, and streaming responses
        │
-       ├── GET /api/summary  -> Full statistical JSON payload + live groupby text
-       ├── GET /api/chart    -> Dynamic theme-matching PNG stream
-       ├── GET /api/data     -> Filtered, sorted, paginated records (JSON numbers, no NaN)
-       └── GET /api/health   -> Server status and row counts
+       ├── GET /api/summary          -> Full statistical JSON payload + live groupby text
+       ├── GET /api/chart            -> Dynamic theme-matching PNG stream (7 kinds)
+       ├── GET /api/data             -> Filtered, sorted, paginated records with selection summary
+       ├── POST /api/scenario-compare-> Two-group empirical cohort comparison
+       ├── GET /api/report/pdf       -> Streamed in-memory executive PDF report
+       └── GET /api/health           -> Server status and row counts
 ```
+
+---
+
+## 5. Architectural Decision: Why No Database (No SQLite / Postgres / ORM)?
+A deliberate architectural choice in SympSort is the **complete absence of a relational database or ORM**:
+1. **Data Scope & Nature**: The input is an immutable, read-only 1,338-row academic observational CSV (~54 KB). Ingesting it into a persistent relational database (SQLite/Postgres) introduces disk locks, connection pooling overhead, and migration friction without any architectural benefit.
+2. **Computational Velocity**: In-memory Pandas operations on 1,338 records take < 2 milliseconds. Vectorized column operations (`df.groupby()`, quantile/median calculations, Student's t confidence intervals) run at native Cython/C speed directly from memory cache.
+3. **True Statelessness for Serverless Deployment**: Because the application maintains zero local database state or open disk handles, it deploys seamlessly to serverless environments (such as Vercel AWS Lambda functions) with zero cold-start database latency, zero connection pooling exhaustion, and no risk of SQLite database file locking across concurrent lambdas.
+4. **Epistemological Integrity**: Medical cost factors in this curriculum represent an observational benchmark dataset; treating it as a dynamic transactional entity requiring CRUD operations would obscure the assignment's data engineering and exploratory focus.
 
 ---
 

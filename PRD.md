@@ -46,29 +46,54 @@
 - `GET /`: Serves desktop SPA.
 - `GET /api/health`: JSON health check `{"status": "ok", "rows": 1338}`.
 - `GET /api/summary`: JSON statistical metrics, validation counts, and live `groupby_text`.
-- `GET /api/chart`: Dynamic PNG stream (150 DPI screen).
-- `GET /api/data`: Filtered, sorted, and paginated records with JSON numbers.
+- `GET /api/chart`: Dynamic PNG stream (150 DPI screen) supporting 7 analytical views.
+- `GET /api/data`: Filtered, sorted, and paginated records with JSON numbers and full selection summary.
 - `POST /api/reload`: Invalidates cache, reloads CSV, returns `{"status": "success", "rows": N}`.
+- `POST /api/scenario-compare`: Two-group empirical cohort comparison with strict range validation.
+- `GET /api/report/pdf`: Direct in-memory executive PDF download.
 - `GET /api/download/chart`: Direct 300 DPI high-resolution attachment.
 - `GET /api/download/summary`: CSV summary export.
+- `GET /api/download/filtered`: Active filtered records CSV export.
+
+### FR-6: Scenario Comparison Engine (View 6)
+- Allows two customized empirical cohorts (Scenario A vs Scenario B) across 6 filter dimensions (smoker, sex, region, age min/max, BMI min/max, children).
+- Computes genuine subgroup statistics: matched record count ($n$), mean charges, median charges, min–max range, and standard deviation ($s$).
+- Calculates absolute difference in means, relative percentage shift, and higher cohort badge.
+- Enforces strict input validation (HTTP 400 on inverted bounds or unknown categories).
+- Displays statistical advisory warnings whenever either cohort matches fewer than 20 records ($n < 20$) or matches 0 records.
+- Embeds prominent academic disclaimer establishing results as observational historical subgroup statistics, not individual quotes or causal health predictions.
+
+### FR-7: Dataset Explorer Multi-Criteria Filtering
+- Multi-dimensional filtering across text search, smoker status, sex, region, children count, numeric age min/max, and numeric BMI min/max.
+- Selection summary strip computed over the entire filtered dataset (not just the current page), displaying matched count, average charges, median charges, and average BMI.
+- Allowlisted column sorting (age, sex, bmi, children, smoker, region, charges) and stable pagination bounds ($1 \le \text{page\_size} \le 200$).
+
+### FR-8: In-Memory PDF & CSV Reporting
+- Generates executive PDF report dynamically in memory using ReportLab (`io.BytesIO`) without temporary disk files.
+- Includes academic title, Kaggle dataset metadata, data cleaning audit, Pandas groupby methodology, summary comparison table with 95% CIs, high-resolution embedded Seaborn chart, statistical significance metrics (Welch's t-test, Mann-Whitney U, Cohen's d), and observational limitations.
+- Preserves direct CSV downloads for summary metrics and filtered subsets.
 
 ---
 
 ## 3. Non-Functional Requirements (NFR)
 1. **Zero External CDN Dependencies:** All fonts, scripts, and stylesheets work offline in an isolated laboratory environment.
-2. **Accessibility (WCAG AA):** Visible 2px focus rings, `aria-current="page"`, `aria-sort="ascending|descending"`, semantic buttons.
+2. **Accessibility (WCAG AA):** Visible 2px focus rings, `aria-current="page"`, `aria-sort="ascending|descending"`, semantic buttons, keyboard navigation (shortcuts `1`–`6`).
 3. **Motion Safety:** All animations respect `prefers-reduced-motion` and disable count-up and transition effects when set.
 4. **Resilience & Fallback:** If `data/insurance.csv` is absent, the backend gracefully falls back to `data/insurance_sample.csv` with a visible indicator.
+5. **No Persistent Disk Pollution:** Temporary chart and report artifacts are compiled in-memory or in system temporary paths; serverless execution on Vercel is completely stateless.
 
 ---
 
-## 4. Verification & QA Checklist (7 Points)
+## 4. Verification & QA Checklist (10 Points)
 | Checkpoint | Expected Behavior | Verification Status |
 |---|---|---|
-| **1. Sidebar Navigation** | Clicking any of the 5 views opens immediately with no page reload. | Passed |
+| **1. Sidebar Navigation** | Clicking any of the 6 views opens immediately with no page reload. | Passed |
 | **2. History & Refresh** | URL hash updates; browser Back/Forward and page refresh preserve view. | Passed |
 | **3. Table Alignment** | Explorer headers and columns match 1:1 with zero drift. | Passed |
 | **4. Currency Formatting** | Charges format as `$12,345.67`; nulls show `—`; never shows `$NaN`. | Passed |
-| **5. Expected Values** | Non-smoker: $8,434.27; Smoker: $32,050.23; Multiplier: 3.80×. | Passed (30/30 tests) |
-| **6. Filtering & Sorting** | Search, smoker filter, region filter, and column sort work properly. | Passed |
-| **7. Export Actions** | "Export Chart" downloads 300 DPI PNG; "Download CSV" downloads data. | Passed |
+| **5. Expected Values** | Non-smoker: $8,434.27; Smoker: $32,050.23; Multiplier: 3.80×. | Passed (81/81 tests) |
+| **6. Advanced Filtering & Sorting** | Search, smoker, sex, region, children, age, and BMI filters work with full-dataset summary. | Passed |
+| **7. Scenario Comparison** | Side-by-side empirical cohort comparison with diffs, warnings, and disclaimer. | Passed |
+| **8. Export Actions** | "Download PDF" streams in-memory PDF; "Download CSV" streams clean CSVs. | Passed |
+| **9. Error Sanitization** | Production error handler suppresses filesystem paths, tracebacks, and internal details. | Passed |
+| **10. Serverless Readiness** | Vercel gateway middleware normalizes paths with zero diagnostic header pollution. | Passed |

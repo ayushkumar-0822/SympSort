@@ -56,10 +56,21 @@ ALL_COLUMNS: list[str] = [
     COLUMN_REGION,
     COLUMN_CHARGES,
 ]
+ALLOWED_SORT_COLUMNS: tuple[str, ...] = tuple(ALL_COLUMNS)
 
-# ── Valid values ──────────────────────────────────────────────────────────────
+# ── Valid values & Validation Bounds ─────────────────────────────────────────
 VALID_SMOKER_VALUES: set[str] = {"yes", "no"}
 VALID_REGIONS: list[str] = ["northeast", "northwest", "southeast", "southwest"]
+VALID_SEXES: set[str] = {"female", "male"}
+
+# Actuarial & demographic validation thresholds
+MIN_CHARGE: float = 0.0
+MIN_AGE: int = 0
+MAX_AGE: int = 120
+MIN_BMI: float = 10.0
+MAX_BMI: float = 100.0
+MIN_CHILDREN: int = 0
+MAX_CHILDREN: int = 20
 
 # ── Color palettes ────────────────────────────────────────────────────────────
 # Teal for non-smoker, brick-red for smoker — consistent across light/dark.

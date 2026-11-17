@@ -74,6 +74,17 @@ plt.rcParams["font.sans-serif"] = [
 _chart_cache: dict[str, bytes] = {}
 
 
+def _data_fingerprint(data: Union[pd.DataFrame, pd.Series]) -> str:
+    """Generate a lightweight data fingerprint for cache keys to prevent stale views."""
+    if isinstance(data, pd.DataFrame):
+        ch_sum = float(data[COLUMN_CHARGES].sum()) if COLUMN_CHARGES in data.columns else 0.0
+        return f"df_{len(data)}_{ch_sum:.1f}"
+    elif isinstance(data, pd.Series):
+        s_sum = float(data.sum()) if not data.empty else 0.0
+        return f"ser_{len(data)}_{s_sum:.1f}"
+    return "none"
+
+
 def clear_chart_cache() -> None:
     """Invalidate all cached chart images (call on data reload)."""
     _chart_cache.clear()
@@ -115,7 +126,7 @@ def generate_chart_bytes(
     if not isinstance(data, pd.DataFrame):
         chart_kind = "bar"
 
-    cache_key = f"{chart_kind}_{'dark' if dark_mode else 'light'}_{'hi' if high_res else 'lo'}"
+    cache_key = f"{chart_kind}_{'dark' if dark_mode else 'light'}_{'hi' if high_res else 'lo'}_{_data_fingerprint(data)}"
 
     if cache_key in _chart_cache and not high_res:
         return _chart_cache[cache_key]
@@ -205,10 +216,11 @@ def _render_bar_chart(
     axis_color: str,
 ) -> None:
     """Render assigned barplot with 95% CI error whiskers & dollar annotations."""
-    if isinstance(data, pd.DataFrame) and COLUMN_SMOKER in data.columns and COLUMN_CHARGES in data.columns:
+    is_raw_df = isinstance(data, pd.DataFrame) and COLUMN_SMOKER in data.columns and COLUMN_CHARGES in data.columns
+    if is_raw_df:
         counts = data[COLUMN_SMOKER].value_counts()
-        n_no = int(counts.get("no", 1064))
-        n_yes = int(counts.get("yes", 274))
+        n_no = int(counts.get("no", 0))
+        n_yes = int(counts.get("yes", 0))
 
         sns.barplot(
             data=data,
@@ -227,13 +239,10 @@ def _render_bar_chart(
         )
     else:
         df_grouped = data if isinstance(data, pd.Series) else pd.Series(data)
-        mean_no = float(df_grouped.get("no", 8434.27))
-        mean_yes = float(df_grouped.get("yes", 32050.23))
-        n_no = 1064
-        n_yes = 274
-
-        ci_no = 360.15
-        ci_yes = 1366.61
+        mean_no = float(df_grouped.get("no", 0.0))
+        mean_yes = float(df_grouped.get("yes", 0.0))
+        n_no = 0
+        n_yes = 0
 
         plot_df = pd.DataFrame({
             "smoker": ["no", "yes"],
@@ -253,21 +262,13 @@ def _render_bar_chart(
             ax=ax,
         )
 
-        ax.errorbar(
-            x=[0, 1],
-            y=[mean_no, mean_yes],
-            yerr=[ci_no, ci_yes],
-            fmt="none",
-            capsize=8,
-            capthick=2.2,
-            elinewidth=2.2,
-            color=text_color,
-        )
-
     # Exact dollar labels above bars
+    max_bar_val = 0.0
     for bar in ax.patches:
         val = bar.get_height()
         if val > 0:
+            if val > max_bar_val:
+                max_bar_val = val
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
                 val + 1100,
@@ -280,16 +281,24 @@ def _render_bar_chart(
             )
 
     ax.set_xticks([0, 1])
-    ax.set_xticklabels(
-        [f"Non-Smoker (n = {n_no:,})", f"Smoker (n = {n_yes:,})"],
-        fontsize=11,
-        fontweight="600",
-        color=text_color,
-    )
+    if is_raw_df and n_no > 0 and n_yes > 0:
+        ax.set_xticklabels(
+            [f"Non-Smoker (n = {n_no:,})", f"Smoker (n = {n_yes:,})"],
+            fontsize=11,
+            fontweight="600",
+            color=text_color,
+        )
+    else:
+        ax.set_xticklabels(
+            ["Non-Smoker", "Smoker"],
+            fontsize=11,
+            fontweight="600",
+            color=text_color,
+        )
     ax.set_xlabel("", labelpad=0)
     ax.set_ylabel("Mean Charges (USD)", fontsize=11, color=text_color, labelpad=10)
     ax.yaxis.set_major_formatter(mticker.StrMethodFormatter("${x:,.0f}"))
-    ax.set_ylim(0, 39500)
+    ax.set_ylim(0, max(39500, max_bar_val * 1.15 if max_bar_val > 0 else 39500))
 
 
 def _render_dist_chart(

@@ -177,10 +177,13 @@ The bytes are cached in an in-memory dictionary (`_chart_cache`) and served via 
 
 #### Q21. How many automated tests exist in your test suite, and what do they verify?
 **Answer:**  
-We have **40 automated tests** passing in `pytest`:
-- **`tests/test_analysis.py`** (9 tests): Grouped means match exact ground-truth values (\$8,434.27 and \$32,050.23), multiplier is 3.80×, percentage difference is +280.00%, empty/corrupt DataFrames raise exceptions, JSON serialization succeeds.
-- **`tests/test_data_validation.py`** (8 tests): Missing CSV fallback, missing required column validation, non-numeric charge coercion, whitespace trimming, empty file handling.
-- **`tests/test_flask_app.py`** (23 tests): Endpoint health, index rendering, summary JSON schema, 95% confidence intervals, 7 multi-chart PNG types, profile matching and small sample warning ($n < 20$), data quality audit, CSV downloads, pagination, and sorting.
+We have **81 automated tests** passing in `pytest` (100% pass rate):
+- **`tests/test_analysis.py`** (12 tests): Grouped means match exact ground-truth values (\$8,434.27 and \$32,050.23), multiplier is 3.80×, percentage difference is +280.00%, empty/corrupt DataFrames raise exceptions, JSON serialization succeeds, pure-Python Student's t confidence intervals, Welch's t-test, Mann-Whitney U, and Cohen's d ($d \approx 3.16$).
+- **`tests/test_data_validation.py`** (11 tests): Missing CSV fallback, missing required column validation, non-numeric charge coercion, whitespace trimming, empty file handling, rejection of negative charges, separate auditing of null vs non-numeric charges, and demographic range reporting.
+- **`tests/test_flask_app.py`** (26 tests): Endpoint health, index rendering, summary JSON schema, 95% confidence intervals, 7 multi-chart PNG types, profile matching and small sample warning ($n < 20$), data quality audit, CSV downloads, pagination, and sorting.
+- **`tests/test_scenarios.py` & `tests/test_scenario.py`** (15 tests): Two-group empirical scenario comparison backend, multi-parameter filtering, strict HTTP 400 validation, edge cases (empty groups, small sample size warnings).
+- **`tests/test_explorer.py`** (10 tests): Multi-criteria filtering (sex, children, age min/max, BMI min/max), search debouncing, allowlisted sorting, stable pagination, and whole-dataset selection summary calculations.
+- **`tests/test_reporting.py`** (6 tests): In-memory PDF report generation via ReportLab, CSV downloads (`/api/download/summary`, `/api/download/filtered`), and high-DPI chart downloads.
 
 #### Q22. How do you run the test suite and CLI standalone mode?
 **Answer:**  
@@ -213,3 +216,58 @@ The Profile Matcher (`/api/profile-match`) is an interactive actuarial lookup to
 #### Q25. What is the single most important academic conclusion of this work?
 **Answer:**  
 While average smoker insurance charges are **3.80× higher** (+\$23,615.96 USD) with overwhelming statistical significance ($t = 32.75, p < 0.001, d = 3.16$), visual decomposition reveals that smoking and obesity ($\text{BMI} \ge 30$) act together to create the highest tier of medical expenses (exceeding \$35,000), whereas normal-weight smokers experience lower (though still elevated) charges. Observational data reveals strong actuarial correlation, but holistic policy requires evaluating multiple lifestyle determinants.
+
+---
+
+### Category 6: Advanced Statistical Engineering & Architectural Decisions
+
+#### Q26. Why was a database (SQLite, PostgreSQL, or an ORM) deliberately NOT used in SympSort?
+**Answer:**  
+Using a database for this project would be an architectural anti-pattern for several reasons:
+1. **Dataset Scope:** The dataset is a static, read-only 1,338-record observational CSV (approx. 54 KB). In-memory Pandas operations execute in under 2 milliseconds across the entire dataset.
+2. **Analytical vs Transactional Fit:** Relational databases excel at transactional ACID updates (OLTP). Pandas excels at vectorized columnar analytical aggregations (OLAP) such as `.groupby()`, quantile/median computations, and Student's t confidence intervals, which are clumsy in standard SQL.
+3. **Zero State & Serverless Deployment:** An in-memory, no-database architecture is entirely stateless. This enables effortless serverless deployment on platforms like Vercel with zero database connection overhead, zero cold-start database latency, and no persistent disk corruption risk.
+4. **Maintenance & Hygiene:** Eliminates migrations, connection pooling, SQLite file locks, and schema synchronization overhead.
+
+#### Q27. How does the Scenario Comparison engine work, and how does it prevent misleading claims?
+**Answer:**  
+The Scenario Comparison engine (`scenario_analysis.py` and `POST /api/scenario-compare`) allows comparing any two customized cohorts across six criteria (smoker, sex, region, age range, BMI range, children).
+Crucially, it enforces rigorous academic honesty:
+- **Strict Range Validation:** Rejects inverted ranges (e.g. `age_min > age_max`) and unrecognized categories with HTTP 400.
+- **Empty Cohort Safety:** Returns `null` for statistical metrics when $n = 0$ instead of fabricating zeroes.
+- **Sample Size Warnings:** Automatically injects a prominent warning banner if either cohort matches fewer than 20 records ($n < 20$), alerting users that empirical estimates suffer from high statistical variance.
+- **Academic Disclaimer:** Explicitly labels all outputs as historical subgroup observational averages, not individual insurance quotes or causal health predictions.
+
+#### Q28. Why must both the mean and the median be reported for medical insurance charges?
+**Answer:**  
+Medical insurance claims are notoriously **right-skewed** (positively skewed) because most individuals incur modest routine healthcare expenses, while a small minority experiences catastrophic hospitalizations:
+- For non-smokers: Mean (\$8,434.27) is higher than the median (\$7,345.41), showing positive skew from occasional high-cost events.
+- For smokers: Median (\$34,456.35) is actually higher than the mean (\$32,050.23), reflecting a bimodal distribution where a heavy cluster of older, obese smokers incurs charges exceeding \$40,000.
+Reporting only the mean conceals this structural skew; reporting both provides the evaluator with the true center and shape of the empirical distributions.
+
+#### Q29. What is the difference between Student's t-test and Welch's t-test, and why is Welch's test required here?
+**Answer:**  
+Standard Student's independent t-test assumes **homoscedasticity** (equal population variances: $\sigma_1^2 = \sigma_2^2$). In our dataset:
+- Non-smoker standard deviation: $s_1 = \$5,993.78$
+- Smoker standard deviation: $s_2 = \$11,541.55$
+The smoker variance is nearly **3.7× higher** than the non-smoker variance, severely violating the equal-variance assumption. **Welch's t-test** (`equal_var=False`) modifies both the standard error calculation and the degrees of freedom using the Welch–Satterthwaite equation, preserving valid Type I error rates under heteroscedasticity.
+
+#### Q30. What does Cohen's $d = 3.16$ mean in practical terms?
+**Answer:**  
+While p-values ($p < 0.001$) only establish that the cost disparity is statistically distinguishable from zero, **Cohen's d** measures the **effect size**—the standardized magnitude of the difference in standard deviations:
+$$d = \frac{\bar{X}_1 - \bar{X}_2}{s_{\text{pooled}}}$$
+In behavioral and social sciences, $d = 0.2$ is considered small, $d = 0.5$ medium, and $d = 0.8$ large. A Cohen's d of **3.16** is astronomical: it demonstrates that the smoker and non-smoker distributions are separated by more than three full pooled standard deviations, indicating a dramatic practical shift in expenditure.
+
+#### Q31. Why did you include the Mann–Whitney U test in addition to Welch's t-test?
+**Answer:**  
+Welch's t-test is a parametric test assuming continuous, approximately normally distributed cohort means (guaranteed by the Central Limit Theorem for $n > 200$). However, because individual medical charges are non-normal and heavily skewed, the **Mann–Whitney U test** provides a non-parametric rank-sum verification that does not assume normality. Both tests yield $p < 0.001$, proving the statistical finding is completely invariant to distributional assumptions.
+
+#### Q32. How are confidence intervals calculated using exact Student's t critical values rather than a fixed 1.96?
+**Answer:**  
+A fixed multiplier of 1.96 derives from the standard normal ($Z$) distribution ($n = \infty$). For finite samples, the Student's t critical value $t^*(\alpha/2, \text{df})$ must be calculated from the inverse cumulative distribution function with degrees of freedom $\text{df} = n - 1$.
+In `analysis.py`, we implemented pure-Python Student's t quantile approximation via Hill's algorithm (`t_quantile(0.975, df)`), ensuring mathematically authentic confidence intervals for cohorts of any sample size without hardcoding.
+
+#### Q33. How does in-memory PDF generation with ReportLab ensure zero permanent disk writes?
+**Answer:**  
+In serverless environments (e.g. Vercel Lambda functions) and multi-tenant servers, writing temporary files to disk introduces concurrency collision risks, security liabilities, and ephemeral storage limits.
+Our `reporting.py` module builds the executive PDF report in memory using Python's `io.BytesIO` buffer, dynamically compiles flowable paragraphs, tables, and Seaborn chart images into memory, and streams the raw bytes directly to the client with `mimetype="application/pdf"` and `Content-Disposition: attachment`. No temporary file is ever created or stored on the server filesystem.

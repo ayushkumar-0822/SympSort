@@ -345,3 +345,40 @@ def test_data_selection_summary(client):
     assert summary["mean_charges"] == 32050.23
     assert summary["median_charges"] == 34456.35
     assert summary["mean_bmi"] > 0
+
+
+# ── 22. GET /api/data with bmi_band and age_band filters ────────────────
+def test_data_bmi_and_age_filters(client):
+    """GET /api/data with bmi_band and age_band returns appropriately filtered records."""
+    res = client.get("/api/data?bmi_band=%3E%3D30&age_band=18-29&page_size=100")
+    assert res.status_code == 200
+    data = res.get_json()
+    records = data.get("records", [])
+    assert len(records) > 0
+    for r in records:
+        assert r["bmi"] >= 30.0
+        assert 18 <= r["age"] <= 29
+
+
+# ── 23. GET /report/printable renders executive report HTML ─────────────
+def test_printable_report_route(client):
+    """GET /report/printable returns HTML report with print styles and core metrics."""
+    res = client.get("/report/printable")
+    assert res.status_code == 200
+    html_text = res.data.decode("utf-8")
+    assert "Printable Executive Report" in html_text
+    assert "32,050.23" in html_text
+    assert "8,434.27" in html_text
+    assert "Welch's t-test" in html_text
+    assert "@media print" in html_text
+
+
+# ── 24. GET /api/download/summary includes statistical metadata ─────────
+def test_download_summary_csv_metadata(client):
+    """GET /api/download/summary CSV includes t-stat, p-value, and disclaimer."""
+    res = client.get("/api/download/summary")
+    assert res.status_code == 200
+    csv_text = res.data.decode("utf-8")
+    assert "t_statistic" in csv_text
+    assert "cohens_d" in csv_text
+    assert "observational dataset" in csv_text

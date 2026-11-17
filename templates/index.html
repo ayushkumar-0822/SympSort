@@ -66,6 +66,15 @@
           <span class="nav-label">About</span>
           <kbd class="nav-kbd">5</kbd>
         </button>
+
+        <button class="nav-item" data-view="scenario" aria-label="Scenario Comparison">
+          <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="18" rx="2"/>
+            <line x1="12" y1="3" x2="12" y2="21"/>
+          </svg>
+          <span class="nav-label">Scenario Comparison</span>
+          <kbd class="nav-kbd">6</kbd>
+        </button>
       </nav>
 
       <div class="sidebar-status">
@@ -88,6 +97,8 @@
         <!-- Contextual Header Actions -->
         <div class="header-actions">
           <button class="btn-icon" id="themeToggle" aria-label="Toggle theme" title="Toggle theme">☀</button>
+          <a class="btn-text header-action-btn" href="/api/report/pdf" id="downloadPdfReportBtn" title="Download executive PDF report">Download PDF</a>
+          <a class="btn-text header-action-btn" href="/report/printable" target="_blank" id="printableReportBtn" title="Open printable executive report for browser print / Save PDF">Print Report</a>
           <button class="btn-text" id="reloadBtn" title="Reload dataset from disk">Reload Data</button>
           <!-- Shown on Overview & Cost Comparison -->
           <button class="btn-text header-action-btn" id="exportChartBtn" title="Export high-resolution chart PNG">Export Chart</button>
@@ -330,79 +341,173 @@
                 </p>
               </div>
 
-              <!-- Compare a Profile Empirical Lookup Tool -->
-              <div class="profile-compare-card" id="profileCompareCard">
+              <!-- Scenario Comparison Engine: Cohort A vs Cohort B -->
+              <div class="profile-compare-card" id="scenarioCompareCard">
                 <div class="section-header-row">
-                  <h2 class="section-heading">Compare a Profile</h2>
-                  <span class="profile-pill">Empirical Subgroup Lookup</span>
+                  <div>
+                    <h2 class="section-heading">Scenario Comparison Engine</h2>
+                    <p class="section-desc">Interactively simulate and compare demographic and lifestyle cohorts. All metrics, 95% confidence intervals, and Welch's t-tests are calculated dynamically with Pandas.</p>
+                  </div>
+                  <span class="profile-pill">Real-Time Pandas Simulation</span>
                 </div>
-                <p class="section-desc">Select demographic and lifestyle attributes to calculate actual empirical charge metrics from matching records in this dataset.</p>
-                <div class="profile-inputs-grid">
-                  <div class="profile-field">
-                    <label for="profileAge">Age Band</label>
-                    <select class="filter-select" id="profileAge">
-                      <option value="all">All Ages</option>
-                      <option value="18-29">Young Adult (18–29)</option>
-                      <option value="30-44">Middle Age (30–44)</option>
-                      <option value="45-64">Older Adult (45–64)</option>
-                    </select>
+
+                <div class="scenario-grid">
+                  <!-- Cohort A (Baseline) -->
+                  <div class="cohort-column" id="cohortACol">
+                    <div class="cohort-header">
+                      <span class="cohort-badge cohort-badge--a">Cohort A · Baseline</span>
+                    </div>
+                    <div class="profile-inputs-grid">
+                      <div class="profile-field">
+                        <label for="profileAge">Age Band</label>
+                        <select class="filter-select scenario-input" id="profileAge" data-cohort="a" data-param="age_band">
+                          <option value="all">All Ages</option>
+                          <option value="18-29">Young Adult (18–29)</option>
+                          <option value="30-44">Middle Age (30–44)</option>
+                          <option value="45-64">Older Adult (45–64)</option>
+                        </select>
+                      </div>
+                      <div class="profile-field">
+                        <label for="profileBmi">BMI Category</label>
+                        <select class="filter-select scenario-input" id="profileBmi" data-cohort="a" data-param="bmi_band">
+                          <option value="all">All BMI</option>
+                          <option value="<25">Normal (&lt; 25)</option>
+                          <option value="25-29.9">Overweight (25–29.9)</option>
+                          <option value=">=30">Obese (≥ 30)</option>
+                        </select>
+                      </div>
+                      <div class="profile-field">
+                        <label for="profileSex">Sex</label>
+                        <select class="filter-select scenario-input" id="profileSex" data-cohort="a" data-param="sex">
+                          <option value="all">All</option>
+                          <option value="female">Female</option>
+                          <option value="male">Male</option>
+                        </select>
+                      </div>
+                      <div class="profile-field">
+                        <label for="profileRegion">Region</label>
+                        <select class="filter-select scenario-input" id="profileRegion" data-cohort="a" data-param="region">
+                          <option value="all">All Regions</option>
+                          <option value="northeast">Northeast</option>
+                          <option value="northwest">Northwest</option>
+                          <option value="southeast">Southeast</option>
+                          <option value="southwest">Southwest</option>
+                        </select>
+                      </div>
+                      <div class="profile-field">
+                        <label for="profileSmoker">Smoker Status</label>
+                        <select class="filter-select scenario-input" id="profileSmoker" data-cohort="a" data-param="smoker">
+                          <option value="no" selected>Non-Smoker</option>
+                          <option value="yes">Smoker</option>
+                          <option value="all">All</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="cohort-metrics-card">
+                      <div class="cohort-metric-main">
+                        <span class="cohort-metric-label">Cohort A Mean</span>
+                        <span class="cohort-metric-val font-tabular" id="scenMeanA">$8,434.27</span>
+                        <span class="cohort-metric-sub" id="scenCountA">n = 1,064 records</span>
+                      </div>
+                      <div class="cohort-submetrics">
+                        <div><span>Median:</span> <strong id="scenMedianA">$7,345.41</strong></div>
+                        <div><span>95% CI:</span> <strong id="scenCiA">±$359.88</strong></div>
+                      </div>
+                    </div>
                   </div>
-                  <div class="profile-field">
-                    <label for="profileBmi">BMI Category</label>
-                    <select class="filter-select" id="profileBmi">
-                      <option value="all">All BMI</option>
-                      <option value="<25">Normal (&lt; 25)</option>
-                      <option value="25-29.9">Overweight (25–29.9)</option>
-                      <option value=">=30">Obese (≥ 30)</option>
-                    </select>
-                  </div>
-                  <div class="profile-field">
-                    <label for="profileSex">Sex</label>
-                    <select class="filter-select" id="profileSex">
-                      <option value="all">All</option>
-                      <option value="female">Female</option>
-                      <option value="male">Male</option>
-                    </select>
-                  </div>
-                  <div class="profile-field">
-                    <label for="profileRegion">Region</label>
-                    <select class="filter-select" id="profileRegion">
-                      <option value="all">All Regions</option>
-                      <option value="northeast">Northeast</option>
-                      <option value="northwest">Northwest</option>
-                      <option value="southeast">Southeast</option>
-                      <option value="southwest">Southwest</option>
-                    </select>
-                  </div>
-                  <div class="profile-field">
-                    <label for="profileSmoker">Smoker Status</label>
-                    <select class="filter-select" id="profileSmoker">
-                      <option value="all">All</option>
-                      <option value="no">Non-Smoker</option>
-                      <option value="yes">Smoker</option>
-                    </select>
+
+                  <!-- Cohort B (Comparison) -->
+                  <div class="cohort-column" id="cohortBCol">
+                    <div class="cohort-header">
+                      <span class="cohort-badge cohort-badge--b">Cohort B · Comparison</span>
+                    </div>
+                    <div class="profile-inputs-grid">
+                      <div class="profile-field">
+                        <label for="scenarioB_age">Age Band</label>
+                        <select class="filter-select scenario-input" id="scenarioB_age" data-cohort="b" data-param="age_band">
+                          <option value="all">All Ages</option>
+                          <option value="18-29">Young Adult (18–29)</option>
+                          <option value="30-44">Middle Age (30–44)</option>
+                          <option value="45-64">Older Adult (45–64)</option>
+                        </select>
+                      </div>
+                      <div class="profile-field">
+                        <label for="scenarioB_bmi">BMI Category</label>
+                        <select class="filter-select scenario-input" id="scenarioB_bmi" data-cohort="b" data-param="bmi_band">
+                          <option value="all">All BMI</option>
+                          <option value="<25">Normal (&lt; 25)</option>
+                          <option value="25-29.9">Overweight (25–29.9)</option>
+                          <option value=">=30">Obese (≥ 30)</option>
+                        </select>
+                      </div>
+                      <div class="profile-field">
+                        <label for="scenarioB_sex">Sex</label>
+                        <select class="filter-select scenario-input" id="scenarioB_sex" data-cohort="b" data-param="sex">
+                          <option value="all">All</option>
+                          <option value="female">Female</option>
+                          <option value="male">Male</option>
+                        </select>
+                      </div>
+                      <div class="profile-field">
+                        <label for="scenarioB_region">Region</label>
+                        <select class="filter-select scenario-input" id="scenarioB_region" data-cohort="b" data-param="region">
+                          <option value="all">All Regions</option>
+                          <option value="northeast">Northeast</option>
+                          <option value="northwest">Northwest</option>
+                          <option value="southeast">Southeast</option>
+                          <option value="southwest">Southwest</option>
+                        </select>
+                      </div>
+                      <div class="profile-field">
+                        <label for="scenarioB_smoker">Smoker Status</label>
+                        <select class="filter-select scenario-input" id="scenarioB_smoker" data-cohort="b" data-param="smoker">
+                          <option value="yes" selected>Smoker</option>
+                          <option value="no">Non-Smoker</option>
+                          <option value="all">All</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="cohort-metrics-card">
+                      <div class="cohort-metric-main">
+                        <span class="cohort-metric-label">Cohort B Mean</span>
+                        <span class="cohort-metric-val font-tabular" id="scenMeanB">$32,050.23</span>
+                        <span class="cohort-metric-sub" id="scenCountB">n = 274 records</span>
+                      </div>
+                      <div class="cohort-submetrics">
+                        <div><span>Median:</span> <strong id="scenMedianB">$34,456.35</strong></div>
+                        <div><span>95% CI:</span> <strong id="scenCiB">±$1,368.53</strong></div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div class="profile-results-box" id="profileResultsBox">
-                  <div class="profile-results-grid">
-                    <div class="profile-res-item">
-                      <span class="profile-res-label">Matched Records</span>
-                      <span class="profile-res-val font-tabular" id="profileMatchCount">1,338</span>
+
+                <!-- Scenario Delta & Statistical Comparison Summary -->
+                <div class="scenario-delta-box" id="scenarioDeltaBox">
+                  <div class="delta-headline-row">
+                    <div class="delta-stat">
+                      <span class="delta-label">Mean Difference (B − A)</span>
+                      <span class="delta-val font-tabular" id="scenDiffMean">+$23,615.96</span>
                     </div>
-                    <div class="profile-res-item">
-                      <span class="profile-res-label">Empirical Mean</span>
-                      <span class="profile-res-val font-tabular" id="profileMatchMean">$13,270.42</span>
+                    <div class="delta-stat">
+                      <span class="delta-label">Relative Shift</span>
+                      <span class="delta-badge" id="scenPctBadge">+280.0%</span>
                     </div>
-                    <div class="profile-res-item">
-                      <span class="profile-res-label">Empirical Median</span>
-                      <span class="profile-res-val font-tabular" id="profileMatchMedian">$9,382.03</span>
+                    <div class="delta-stat">
+                      <span class="delta-label">Cost Multiplier</span>
+                      <span class="delta-val font-tabular" id="scenMultiplier">3.80×</span>
                     </div>
-                    <div class="profile-res-item">
-                      <span class="profile-res-label">Observed Range</span>
-                      <span class="profile-res-val font-tabular" id="profileMatchRange">$1,121.87 – $63,770.43</span>
+                    <div class="delta-stat">
+                      <span class="delta-label">Welch's t-test</span>
+                      <span class="delta-val font-tabular" id="scenTStat">t = 32.75, p &lt; 0.001</span>
                     </div>
                   </div>
-                  <div class="profile-warning hidden" id="profileWarning"></div>
+
+                  <p class="scenario-statement" id="scenStatement">
+                    In this observational dataset, Cohort B averages $32,050.23 vs $8,434.27 for Cohort A (+$23,615.96, +280.0%). This demonstrates empirical subgroup distribution and does not constitute an individual health risk prediction.
+                  </p>
+                  <div class="scenario-warning hidden" id="scenWarning"></div>
                 </div>
               </div>
             </div>
@@ -439,6 +544,32 @@
                   <option value="northwest">Northwest</option>
                   <option value="southeast">Southeast</option>
                   <option value="southwest">Southwest</option>
+                </select>
+                <select class="filter-select" id="sexFilter" aria-label="Filter by sex">
+                  <option value="">All Sexes</option>
+                  <option value="female">Female</option>
+                  <option value="male">Male</option>
+                </select>
+                <select class="filter-select" id="childrenFilter" aria-label="Filter by children count">
+                  <option value="">All Children</option>
+                  <option value="0">0 children</option>
+                  <option value="1">1 child</option>
+                  <option value="2">2 children</option>
+                  <option value="3">3 children</option>
+                  <option value="4">4 children</option>
+                  <option value="5">5 children</option>
+                </select>
+                <select class="filter-select" id="bmiFilter" aria-label="Filter by BMI category">
+                  <option value="">All BMI</option>
+                  <option value="<25">Normal (&lt; 25)</option>
+                  <option value="25-29.9">Overweight (25–29.9)</option>
+                  <option value=">=30">Obese (≥ 30)</option>
+                </select>
+                <select class="filter-select" id="ageFilter" aria-label="Filter by age group">
+                  <option value="">All Ages</option>
+                  <option value="18-29">Young Adult (18–29)</option>
+                  <option value="30-44">Middle Age (30–44)</option>
+                  <option value="45-64">Older Adult (45–64)</option>
                 </select>
                 <button type="button" class="btn-text btn-reset-filters" id="resetFiltersBtn">Reset Filters</button>
               </div>
@@ -673,6 +804,241 @@ plt.show()</code></pre>
                 <li><strong>Unbalanced groups</strong> — Non-smokers (n = 1,064) outnumber smokers (n = 274), which affects statistical power and variance estimates.</li>
                 <li><strong>Single source</strong> — Results reflect this specific insurance dataset and should not be used for clinical decision-making.</li>
               </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- ─── View 6: Scenario Comparison ─── -->
+        <section class="view" id="view-scenario" aria-label="Scenario Comparison">
+          <div class="view-inner">
+            <header class="view-header">
+              <h1 class="view-h1">Scenario Comparison</h1>
+              <p class="view-lead">Interactively compare empirical claims distributions across customized cohorts using Pandas on the complete dataset.</p>
+            </header>
+
+            <div class="scenario-layout">
+              <!-- Controls Container (Side-by-side on desktop, stacked on mobile) -->
+              <div class="scenario-panels-grid">
+                <!-- Panel A -->
+                <div class="scenario-panel" id="scenPanelA">
+                  <div class="scenario-panel-header">
+                    <span class="cohort-badge cohort-badge--a">Scenario A · Baseline</span>
+                  </div>
+                  <div class="scenario-form">
+                    <div class="form-row">
+                      <label for="scenA_smoker">Smoker Status</label>
+                      <select class="filter-select scenario-ctrl" id="scenA_smoker" data-scenario="a" data-param="smoker">
+                        <option value="all">All Records</option>
+                        <option value="no" selected>Non-smoker</option>
+                        <option value="yes">Smoker</option>
+                      </select>
+                    </div>
+                    <div class="form-row">
+                      <label for="scenA_sex">Sex</label>
+                      <select class="filter-select scenario-ctrl" id="scenA_sex" data-scenario="a" data-param="sex">
+                        <option value="all" selected>All Sexes</option>
+                        <option value="female">Female</option>
+                        <option value="male">Male</option>
+                      </select>
+                    </div>
+                    <div class="form-row">
+                      <label for="scenA_region">Region</label>
+                      <select class="filter-select scenario-ctrl" id="scenA_region" data-scenario="a" data-param="region">
+                        <option value="all" selected>All Regions</option>
+                        <option value="northeast">Northeast</option>
+                        <option value="northwest">Northwest</option>
+                        <option value="southeast">Southeast</option>
+                        <option value="southwest">Southwest</option>
+                      </select>
+                    </div>
+                    <div class="form-row form-row--split">
+                      <div class="form-subcol">
+                        <label for="scenA_age_min">Age Min</label>
+                        <input type="number" class="search-input scenario-ctrl" id="scenA_age_min" data-scenario="a" data-param="age_min" placeholder="e.g. 18" min="0" max="120">
+                      </div>
+                      <div class="form-subcol">
+                        <label for="scenA_age_max">Age Max</label>
+                        <input type="number" class="search-input scenario-ctrl" id="scenA_age_max" data-scenario="a" data-param="age_max" placeholder="e.g. 64" min="0" max="120">
+                      </div>
+                    </div>
+                    <div class="form-row form-row--split">
+                      <div class="form-subcol">
+                        <label for="scenA_bmi_min">BMI Min</label>
+                        <input type="number" step="0.1" class="search-input scenario-ctrl" id="scenA_bmi_min" data-scenario="a" data-param="bmi_min" placeholder="e.g. 15.0" min="10" max="100">
+                      </div>
+                      <div class="form-subcol">
+                        <label for="scenA_bmi_max">BMI Max</label>
+                        <input type="number" step="0.1" class="search-input scenario-ctrl" id="scenA_bmi_max" data-scenario="a" data-param="bmi_max" placeholder="e.g. 55.0" min="10" max="100">
+                      </div>
+                    </div>
+                    <div class="form-row">
+                      <label for="scenA_children">Children</label>
+                      <select class="filter-select scenario-ctrl" id="scenA_children" data-scenario="a" data-param="children">
+                        <option value="all" selected>All Children</option>
+                        <option value="0">0 children</option>
+                        <option value="1">1 child</option>
+                        <option value="2">2 children</option>
+                        <option value="3">3 children</option>
+                        <option value="4">4 children</option>
+                        <option value="5">5 children</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Panel B -->
+                <div class="scenario-panel" id="scenPanelB">
+                  <div class="scenario-panel-header">
+                    <span class="cohort-badge cohort-badge--b">Scenario B · Comparison</span>
+                  </div>
+                  <div class="scenario-form">
+                    <div class="form-row">
+                      <label for="scenB_smoker">Smoker Status</label>
+                      <select class="filter-select scenario-ctrl" id="scenB_smoker" data-scenario="b" data-param="smoker">
+                        <option value="all">All Records</option>
+                        <option value="no">Non-smoker</option>
+                        <option value="yes" selected>Smoker</option>
+                      </select>
+                    </div>
+                    <div class="form-row">
+                      <label for="scenB_sex">Sex</label>
+                      <select class="filter-select scenario-ctrl" id="scenB_sex" data-scenario="b" data-param="sex">
+                        <option value="all" selected>All Sexes</option>
+                        <option value="female">Female</option>
+                        <option value="male">Male</option>
+                      </select>
+                    </div>
+                    <div class="form-row">
+                      <label for="scenB_region">Region</label>
+                      <select class="filter-select scenario-ctrl" id="scenB_region" data-scenario="b" data-param="region">
+                        <option value="all" selected>All Regions</option>
+                        <option value="northeast">Northeast</option>
+                        <option value="northwest">Northwest</option>
+                        <option value="southeast">Southeast</option>
+                        <option value="southwest">Southwest</option>
+                      </select>
+                    </div>
+                    <div class="form-row form-row--split">
+                      <div class="form-subcol">
+                        <label for="scenB_age_min">Age Min</label>
+                        <input type="number" class="search-input scenario-ctrl" id="scenB_age_min" data-scenario="b" data-param="age_min" placeholder="e.g. 18" min="0" max="120">
+                      </div>
+                      <div class="form-subcol">
+                        <label for="scenB_age_max">Age Max</label>
+                        <input type="number" class="search-input scenario-ctrl" id="scenB_age_max" data-scenario="b" data-param="age_max" placeholder="e.g. 64" min="0" max="120">
+                      </div>
+                    </div>
+                    <div class="form-row form-row--split">
+                      <div class="form-subcol">
+                        <label for="scenB_bmi_min">BMI Min</label>
+                        <input type="number" step="0.1" class="search-input scenario-ctrl" id="scenB_bmi_min" data-scenario="b" data-param="bmi_min" placeholder="e.g. 15.0" min="10" max="100">
+                      </div>
+                      <div class="form-subcol">
+                        <label for="scenB_bmi_max">BMI Max</label>
+                        <input type="number" step="0.1" class="search-input scenario-ctrl" id="scenB_bmi_max" data-scenario="b" data-param="bmi_max" placeholder="e.g. 55.0" min="10" max="100">
+                      </div>
+                    </div>
+                    <div class="form-row">
+                      <label for="scenB_children">Children</label>
+                      <select class="filter-select scenario-ctrl" id="scenB_children" data-scenario="b" data-param="children">
+                        <option value="all" selected>All Children</option>
+                        <option value="0">0 children</option>
+                        <option value="1">1 child</option>
+                        <option value="2">2 children</option>
+                        <option value="3">3 children</option>
+                        <option value="4">4 children</option>
+                        <option value="5">5 children</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Action Bar -->
+              <div class="scenario-actions-bar">
+                <button type="button" class="btn-text btn-primary" id="scenCompareRunBtn">Compare Cohorts</button>
+                <button type="button" class="btn-text" id="scenCompareResetBtn">Reset to Default</button>
+                <span class="scenario-status-indicator" id="scenStatusIndicator"></span>
+              </div>
+
+              <!-- Comparative Difference Banner -->
+              <div class="scenario-diff-card" id="scenDiffCard">
+                <div class="diff-header-row">
+                  <div>
+                    <span class="diff-label">Empirical Difference in Means (B − A)</span>
+                    <div class="diff-headline">
+                      <span class="diff-amount font-tabular" id="scenDiffAmount">+$23,615.96</span>
+                      <span class="diff-pct-badge" id="scenDiffPctBadge">+280.0%</span>
+                      <span class="higher-badge" id="scenHigherBadge">Scenario B is higher</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Warning Banner -->
+              <div class="scenario-warning-box hidden" id="scenWarningBox">
+                <span class="warning-icon">⚠</span>
+                <span class="warning-text" id="scenWarningText"></span>
+              </div>
+
+              <!-- Side-by-Side Detailed Metric Cards -->
+              <div class="scenario-metrics-grid">
+                <!-- Metrics A -->
+                <div class="scenario-metric-box">
+                  <h3 class="scenario-metric-title">Scenario A Statistics</h3>
+                  <div class="metric-row">
+                    <span class="metric-key">Matched Records (n)</span>
+                    <span class="metric-val font-tabular" id="scenStatsACount">1,064</span>
+                  </div>
+                  <div class="metric-row">
+                    <span class="metric-key">Mean Charges</span>
+                    <span class="metric-val font-tabular" id="scenStatsAMean">$8,434.27</span>
+                  </div>
+                  <div class="metric-row">
+                    <span class="metric-key">Median Charges</span>
+                    <span class="metric-val font-tabular" id="scenStatsAMedian">$7,345.41</span>
+                  </div>
+                  <div class="metric-row">
+                    <span class="metric-key">Min – Max Range</span>
+                    <span class="metric-val font-tabular" id="scenStatsARange">$1,121.87 – $36,910.61</span>
+                  </div>
+                  <div class="metric-row">
+                    <span class="metric-key">Standard Deviation (s)</span>
+                    <span class="metric-val font-tabular" id="scenStatsAStd">$5,993.78</span>
+                  </div>
+                </div>
+
+                <!-- Metrics B -->
+                <div class="scenario-metric-box">
+                  <h3 class="scenario-metric-title">Scenario B Statistics</h3>
+                  <div class="metric-row">
+                    <span class="metric-key">Matched Records (n)</span>
+                    <span class="metric-val font-tabular" id="scenStatsBCount">274</span>
+                  </div>
+                  <div class="metric-row">
+                    <span class="metric-key">Mean Charges</span>
+                    <span class="metric-val font-tabular" id="scenStatsBMean">$32,050.23</span>
+                  </div>
+                  <div class="metric-row">
+                    <span class="metric-key">Median Charges</span>
+                    <span class="metric-val font-tabular" id="scenStatsBMedian">$34,456.35</span>
+                  </div>
+                  <div class="metric-row">
+                    <span class="metric-key">Min – Max Range</span>
+                    <span class="metric-val font-tabular" id="scenStatsBRange">$12,829.46 – $63,770.43</span>
+                  </div>
+                  <div class="metric-row">
+                    <span class="metric-key">Standard Deviation (s)</span>
+                    <span class="metric-val font-tabular" id="scenStatsBStd">$11,541.59</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Academic Disclaimer Callout -->
+              <div class="scenario-disclaimer-callout">
+                <strong>Empirical Methodology Disclaimer:</strong>
+                <p id="scenDisclaimerText">This scenario comparison calculates genuine subgroup historical statistics from the loaded observational insurance dataset (n = 1,338). Subgroup averages reflect observational historical claims and do not constitute an individualized health risk prediction, underwriting insurance quote, or evidence of biological causation.</p>
+              </div>
             </div>
           </div>
         </section>

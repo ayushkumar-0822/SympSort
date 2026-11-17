@@ -5,6 +5,7 @@
 tests
 docs
 outputs
-*.png
+archive
 *.bat
 *.ps1
+*.zip

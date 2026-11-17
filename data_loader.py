@@ -45,8 +45,10 @@ class ValidationReport:
     missing_required_cols: list[str] = field(default_factory=list)
     null_charges_count: int = 0
     non_numeric_charges_count: int = 0
+    negative_charges_count: int = 0
     invalid_smoker_count: int = 0
     unexpected_smoker_values: list[str] = field(default_factory=list)
+    demographic_validation: dict[str, Any] = field(default_factory=dict)
     error_message: Optional[str] = None
     warning_messages: list[str] = field(default_factory=list)
     used_sample: bool = False
@@ -175,21 +177,51 @@ def load_dataset(
             report.unexpected_smoker_values,
         )
 
-    # ── Coerce charges to float64 ─────────────────────────────────────────
-    converted_charges = pd.to_numeric(df[COLUMN_CHARGES], errors="coerce")
-    null_charges_mask = converted_charges.isna()
-    report.null_charges_count = int(null_charges_mask.sum())
-    report.non_numeric_charges_count = report.null_charges_count
+    # ── Coerce charges to float64, distinguish null vs non-numeric, reject negatives ──
+    raw_charges = df[COLUMN_CHARGES]
+    is_missing_mask = raw_charges.isna() | (raw_charges.astype(str).str.strip().str.lower().isin(["", "nan", "none", "null"]))
+    converted_charges = pd.to_numeric(raw_charges, errors="coerce")
+    is_non_numeric_mask = (~is_missing_mask) & converted_charges.isna()
+    is_negative_mask = (~converted_charges.isna()) & (converted_charges < getattr(config, "MIN_CHARGE", 0.0))
+
+    report.null_charges_count = int(is_missing_mask.sum())
+    report.non_numeric_charges_count = int(is_non_numeric_mask.sum())
+    report.negative_charges_count = int(is_negative_mask.sum())
     df[COLUMN_CHARGES] = converted_charges
 
     if report.null_charges_count > 0:
-        logger.warning(
-            "Dropped %d rows with non-numeric or null charges",
-            report.null_charges_count,
-        )
+        report.warning_messages.append(f"Found {report.null_charges_count} rows with missing charges.")
+    if report.non_numeric_charges_count > 0:
+        report.warning_messages.append(f"Found {report.non_numeric_charges_count} rows with non-numeric charges.")
+    if report.negative_charges_count > 0:
+        report.warning_messages.append(f"Rejected {report.negative_charges_count} rows with negative charges (< {getattr(config, 'MIN_CHARGE', 0.0)}).")
+
+    # ── Validate optional demographic columns ─────────────────────────────
+    demo_status = {}
+    if getattr(config, "COLUMN_AGE", "age") in df.columns:
+        converted_age = pd.to_numeric(df[config.COLUMN_AGE], errors="coerce")
+        invalid_age = converted_age.isna() | (converted_age < getattr(config, "MIN_AGE", 0)) | (converted_age > getattr(config, "MAX_AGE", 120))
+        demo_status[config.COLUMN_AGE] = {"valid": int((~invalid_age).sum()), "invalid": int(invalid_age.sum())}
+    if getattr(config, "COLUMN_BMI", "bmi") in df.columns:
+        converted_bmi = pd.to_numeric(df[config.COLUMN_BMI], errors="coerce")
+        invalid_bmi = converted_bmi.isna() | (converted_bmi < getattr(config, "MIN_BMI", 10.0)) | (converted_bmi > getattr(config, "MAX_BMI", 100.0))
+        demo_status[config.COLUMN_BMI] = {"valid": int((~invalid_bmi).sum()), "invalid": int(invalid_bmi.sum())}
+    if getattr(config, "COLUMN_SEX", "sex") in df.columns:
+        clean_sex = df[config.COLUMN_SEX].astype(str).str.strip().str.lower()
+        invalid_sex = ~clean_sex.isin(getattr(config, "VALID_SEXES", {"female", "male"}))
+        demo_status[config.COLUMN_SEX] = {"valid": int((~invalid_sex).sum()), "invalid": int(invalid_sex.sum())}
+    if getattr(config, "COLUMN_REGION", "region") in df.columns:
+        clean_region = df[config.COLUMN_REGION].astype(str).str.strip().str.lower()
+        invalid_region = ~clean_region.isin(getattr(config, "VALID_REGIONS", ["northeast", "northwest", "southeast", "southwest"]))
+        demo_status[config.COLUMN_REGION] = {"valid": int((~invalid_region).sum()), "invalid": int(invalid_region.sum())}
+    if getattr(config, "COLUMN_CHILDREN", "children") in df.columns:
+        converted_children = pd.to_numeric(df[config.COLUMN_CHILDREN], errors="coerce")
+        invalid_children = converted_children.isna() | (converted_children < getattr(config, "MIN_CHILDREN", 0)) | (converted_children > getattr(config, "MAX_CHILDREN", 20))
+        demo_status[config.COLUMN_CHILDREN] = {"valid": int((~invalid_children).sum()), "invalid": int(invalid_children.sum())}
+    report.demographic_validation = demo_status
 
     # ── Filter valid rows ─────────────────────────────────────────────────
-    keep_mask = (~null_charges_mask) & valid_smoker_mask
+    keep_mask = (~converted_charges.isna()) & (~is_negative_mask) & valid_smoker_mask
     df_valid = df.loc[keep_mask].copy()
 
     # ── Final counts ──────────────────────────────────────────────────────

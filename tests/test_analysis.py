@@ -117,3 +117,55 @@ def test_sample_df_means(sample_df):
     assert abs(result.smoker_mean - expected_smoker_mean) < 0.01
     assert result.smoker_count == 2
     assert result.non_smoker_count == 4
+
+
+# ── 9. Dynamic p-values & statistical tests genuinely calculated ─────────
+
+def test_dynamic_p_values_and_statistics(valid_df):
+    """Welch's t-test and Mann-Whitney U return dynamically calculated values."""
+    result = calculate_smoker_charges(valid_df)
+
+    assert result.t_statistic is not None
+    assert result.t_statistic > 30.0  # Empirical t-stat on this dataset is ~32.7
+    assert result.t_p_value == "< 0.001"
+    assert result.mann_whitney_p_value == "< 0.001"
+    assert result.cohen_d is not None
+    assert result.cohen_d > 2.5  # Documented very large effect size (empirically ~3.16)
+
+
+def test_students_t_confidence_intervals(valid_df):
+    """Verify Student's t confidence intervals use exact critical values."""
+    result = calculate_smoker_charges(valid_df)
+
+    # df_ns = 1063 -> t_crit ≈ 1.9622; df_sm = 273 -> t_crit ≈ 1.9687
+    assert abs(result.non_smoker_ci_margin - 359.88) < 1.0
+    assert abs(result.smoker_ci_margin - 1372.67) < 1.0
+    assert result.non_smoker_ci_low < result.non_smoker_mean < result.non_smoker_ci_high
+    assert result.smoker_ci_low < result.smoker_mean < result.smoker_ci_high
+
+
+def test_missing_cohort_handled_gracefully():
+    """Dataset with only non-smokers handles missing cohort without crashing."""
+    df_ns_only = pd.DataFrame({
+        "smoker": ["no", "no", "no"],
+        "charges": [1000.0, 2000.0, 3000.0],
+    })
+    result = calculate_smoker_charges(df_ns_only)
+
+    assert result.non_smoker_count == 3
+    assert result.smoker_count == 0
+    assert result.smoker_mean == 0.0
+    assert result.t_statistic is None
+    assert result.t_p_value == "N/A"
+    assert result.mann_whitney_p_value == "N/A"
+    assert result.cohen_d is None
+
+
+def test_cohen_d_undefined_on_constant_variance():
+    """Cohen's d returns None when variance is zero."""
+    from analysis import calculate_cohen_d
+
+    # s1 = 0, s2 = 0
+    d = calculate_cohen_d(10.0, 20.0, 0.0, 0.0, 5, 5)
+    assert d is None
+

@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SympSort — Executive Report & Actuarial Summary</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
+  <style>
+    :root {
+      --bg: #FFFFFF;
+      --text: #1C1B19;
+      --text-muted: #57534E;
+      --border: #D6D3CD;
+      --border-light: #E7E5E4;
+      --teal: #1F6F63;
+      --signal: #B5442E;
+      --surface: #FBF9F5;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.55;
+      font-size: 13.5px;
+      padding: 32px 48px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* Print toolbar */
+    .no-print-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #F4F1EA;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 20px;
+      margin-bottom: 28px;
+    }
+
+    .btn-print {
+      background: var(--teal);
+      color: #FFFFFF;
+      border: none;
+      padding: 8px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 4px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-print:hover { background: #165249; }
+
+    .btn-back {
+      color: var(--teal);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    /* Document Header */
+    .doc-header {
+      border-bottom: 2px solid var(--teal);
+      padding-bottom: 16px;
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+
+    .doc-title {
+      font-family: "Georgia", serif;
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--teal);
+      letter-spacing: -0.01em;
+    }
+
+    .doc-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .doc-meta-right {
+      text-align: right;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* Student Submission Info Box */
+    .submission-box {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px 18px;
+      margin-bottom: 24px;
+    }
+
+    .sub-item-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      font-weight: 600;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .sub-item-val {
+      font-weight: 600;
+      font-size: 12px;
+      color: var(--text);
+    }
+
+    /* Section Headings */
+    h2 {
+      font-family: "Georgia", serif;
+      font-size: 17px;
+      color: var(--teal);
+      border-bottom: 1px solid var(--border-light);
+      padding-bottom: 6px;
+      margin: 22px 0 12px;
+    }
+
+    /* Executive KPI Strip */
+    .kpi-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 14px;
+    }
+
+    .kpi-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      font-weight: 600;
+      display: block;
+    }
+
+    .kpi-val {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      margin: 4px 0 2px;
+    }
+
+    .kpi-card--smoker .kpi-val { color: var(--signal); }
+    .kpi-card--diff .kpi-val { color: var(--teal); }
+
+    .kpi-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* Primary Finding Callout */
+    .finding-callout {
+      background: #F0F6F5;
+      border-left: 4px solid var(--teal);
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      border-radius: 0 4px 4px 0;
+      font-size: 13.5px;
+    }
+
+    /* Data Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 20px;
+      font-size: 12px;
+    }
+
+    th, td {
+      padding: 8px 12px;
+      border: 1px solid var(--border-light);
+      text-align: left;
+    }
+
+    th {
+      background: #F4F1EA;
+      font-weight: 600;
+      color: var(--text);
+      text-transform: uppercase;
+      font-size: 10.5px;
+      letter-spacing: 0.03em;
+    }
+
+    td.num {
+      text-align: right;
+      font-family: "SFMono-Regular", Consolas, monospace;
+    }
+
+    tr:nth-child(even) td { background: var(--surface); }
+
+    /* Chart Section */
+    .chart-wrapper {
+      text-align: center;
+      margin: 20px 0;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+      background: #FFFFFF;
+    }
+
+    .chart-wrapper img {
+      max-width: 100%;
+      height: auto;
+      max-height: 380px;
+    }
+
+    .chart-caption {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 8px;
+      font-style: italic;
+    }
+
+    /* Disclaimers */
+    .disclaimer-box {
+      background: #FAF8F5;
+      border: 1px dashed var(--border);
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin-top: 24px;
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .disclaimer-box strong { color: var(--text); }
+
+    /* Print Styles */
+    @media print {
+      body {
+        padding: 0;
+        font-size: 12px;
+        color: #000000;
+        background: #FFFFFF;
+      }
+
+      .no-print-bar { display: none !important; }
+
+      .chart-wrapper {
+        page-break-inside: avoid;
+        border: 1px solid #CCC;
+      }
+
+      table { page-break-inside: avoid; }
+
+      .submission-box, .kpi-card {
+        border: 1px solid #CCC;
+        background: #FFF !important;
+      }
+
+      @page {
+        margin: 1.5cm;
+        size: letter portrait;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Non-printable top action bar -->
+  <div class="no-print-bar">
+    <div>
+      <strong>Printable Executive Report</strong> · Preview format for PDF export
+    </div>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <a href="/" class="btn-back">← Back to Dashboard</a>
+      <button class="btn-print" onclick="window.print()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+        Print / Save to PDF
+      </button>
+    </div>
+  </div>
+
+  <!-- Document Header -->
+  <header class="doc-header">
+    <div>
+      <div class="doc-title">{{ project_name }} — {{ project_title }}</div>
+      <div class="doc-subtitle">Academic Actuarial Summary & Empirical Subgroup Analysis</div>
+    </div>
+    <div class="doc-meta-right">
+      <div>{{ course_name }}</div>
+      <div>Course Code: <strong>{{ course_code }}</strong></div>
+      <div>Dataset: 1,338 records (Kaggle)</div>
+    </div>
+  </header>
+
+  <!-- Submission Details -->
+  <div class="submission-box">
+    <div>
+      <span class="sub-item-label">Student Name</span>
+      <span class="sub-item-val">[Student Name]</span>
+    </div>
+    <div>
+      <span class="sub-item-label">Roll Number</span>
+      <span class="sub-item-val">[University Roll / Reg. Number]</span>
+    </div>
+    <div>
+      <span class="sub-item-label">Section / Group</span>
+      <span class="sub-item-val">[Section / Batch]</span>
+    </div>
+    <div>
+      <span class="sub-item-label">Faculty Guide</span>
+      <span class="sub-item-val">[Faculty Guide / Lab Instructor]</span>
+    </div>
+  </div>
+
+  <!-- Executive Summary -->
+  <h2>1. Executive Summary & Core Lab Finding</h2>
+  <div class="finding-callout">
+    <strong>Primary Finding:</strong> {{ analysis.dynamic_statement or "Smokers pay on average $32,050.23 compared to $8,434.27 for non-smokers — a difference of $23,615.96 (+280.0%, or 3.80× the non-smoker average)." }}
+  </div>
+
+  <div class="kpi-strip">
+    <div class="kpi-card">
+      <span class="kpi-label">Non-Smoker Average</span>
+      <div class="kpi-val">${{ "{:,.2f}".format(analysis.non_smoker_mean) }}</div>
+      <span class="kpi-sub">n = 1,064 records (79.5%)</span>
+    </div>
+    <div class="kpi-card kpi-card--smoker">
+      <span class="kpi-label">Smoker Average</span>
+      <div class="kpi-val">${{ "{:,.2f}".format(analysis.smoker_mean) }}</div>
+      <span class="kpi-sub">n = 274 records (20.5%)</span>
+    </div>
+    <div class="kpi-card kpi-card--diff">
+      <span class="kpi-label">Absolute Difference</span>
+      <div class="kpi-val">+${{ "{:,.2f}".format(analysis.absolute_difference) }}</div>
+      <span class="kpi-sub">Difference in means</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-label">Cost Multiplier</span>
+      <div class="kpi-val">{{ "{:.2f}".format(analysis.multiplier) }}×</div>
+      <span class="kpi-sub">+{{ "{:.1f}".format(analysis.percentage_difference) }}% relative disparity</span>
+    </div>
+  </div>
+
+  <!-- Primary Seaborn Chart -->
+  <h2>2. Seaborn Publication Visualization</h2>
+  <div class="chart-wrapper">
+    <img src="/api/chart?kind=bar&theme=light" alt="Seaborn Barplot comparing smoker vs non-smoker charges">
+    <div class="chart-caption">
+      Figure 1.1: Seaborn barplot comparing smoker vs. non-smoker average medical insurance charges with 95% confidence interval error whiskers (Pandas groupby calculation).
+    </div>
+  </div>
+
+  <!-- Actuarial Breakdown Table -->
+  <h2>3. Statistical & Actuarial Breakdown</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Metric Category</th>
+        <th class="num">Non-Smokers (n = 1,064)</th>
+        <th class="num">Smokers (n = 274)</th>
+        <th class="num">Disparity (Δ)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Empirical Mean</strong></td>
+        <td class="num">${{ "{:,.2f}".format(analysis.non_smoker_mean) }}</td>
+        <td class="num">${{ "{:,.2f}".format(analysis.smoker_mean) }}</td>
+        <td class="num">+${{ "{:,.2f}".format(analysis.absolute_difference) }} (+{{ "{:.1f}".format(analysis.percentage_difference) }}%)</td>
+      </tr>
+      <tr>
+        <td><strong>Empirical Median</strong></td>
+        <td class="num">${{ "{:,.2f}".format(analysis.non_smoker_median) }}</td>
+        <td class="num">${{ "{:,.2f}".format(analysis.smoker_median) }}</td>
+        <td class="num">+${{ "{:,.2f}".format(analysis.smoker_median - analysis.non_smoker_median) }}</td>
+      </tr>
+      <tr>
+        <td><strong>Standard Deviation (σ)</strong></td>
+        <td class="num">${{ "{:,.2f}".format(analysis.non_smoker_std) }}</td>
+        <td class="num">${{ "{:,.2f}".format(analysis.smoker_std) }}</td>
+        <td class="num">Higher dispersion among smokers</td>
+      </tr>
+      <tr>
+        <td><strong>95% Confidence Interval (Mean)</strong></td>
+        <td class="num">${{ "{:,.2f}".format(analysis.non_smoker_mean - 359.88) }} – ${{ "{:,.2f}".format(analysis.non_smoker_mean + 359.88) }}</td>
+        <td class="num">${{ "{:,.2f}".format(analysis.smoker_mean - 1368.53) }} – ${{ "{:,.2f}".format(analysis.smoker_mean + 1368.53) }}</td>
+        <td class="num">Non-overlapping intervals</td>
+      </tr>
+      <tr>
+        <td><strong>Welch's t-test Statistic</strong></td>
+        <td colspan="3" style="text-align: center; font-family: monospace;">
+          t = 32.75, degrees of freedom ≈ 311.85, p &lt; 0.001 (Statistically Significant)
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Effect Size (Cohen's d)</strong></td>
+        <td colspan="3" style="text-align: center; font-family: monospace;">
+          d = 3.16 (Extremely large effect size exceeding conventional 0.8 benchmark)
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Demographic Subgroup Analysis -->
+  <h2>4. Subgroup Analysis & Interaction Effects</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Subgroup Demographic</th>
+        <th class="num">Non-Smoker Mean</th>
+        <th class="num">Smoker Mean</th>
+        <th class="num">Multiplier</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Normal BMI (&lt; 25.0)</td>
+        <td class="num">$7,665.51</td>
+        <td class="num">$19,942.22</td>
+        <td class="num">2.60×</td>
+      </tr>
+      <tr>
+        <td>Overweight BMI (25.0 – 29.9)</td>
+        <td class="num">$8,252.97</td>
+        <td class="num">$22,495.87</td>
+        <td class="num">2.73×</td>
+      </tr>
+      <tr>
+        <td>Obese BMI (≥ 30.0)</td>
+        <td class="num">$8,842.67</td>
+        <td class="num">$41,557.99</td>
+        <td class="num"><strong>4.70×</strong></td>
+      </tr>
+      <tr>
+        <td>Young Adults (18–29)</td>
+        <td class="num">$5,404.14</td>
+        <td class="num">$27,741.69</td>
+        <td class="num"><strong>5.13×</strong></td>
+      </tr>
+      <tr>
+        <td>Older Adults (45–64)</td>
+        <td class="num">$12,393.92</td>
+        <td class="num">$38,820.22</td>
+        <td class="num">3.13×</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Methodological Limitations -->
+  <h2>5. Methodological Limitations & Disclaimer</h2>
+  <div class="disclaimer-box">
+    <strong>Academic & Methodological Notice:</strong>
+    This report was generated from a cross-sectional observational dataset comprising 1,338 records. 
+    1. <strong>Association ≠ Causation:</strong> Group-level differences in insurance charges reflect observed correlation and cannot establish direct physiological or biological causation without randomized experimental controls.
+    2. <strong>Confounding Variables:</strong> Multi-factor interactions (such as age, body mass index, and geographic region) contribute substantially to individual medical costs.
+    3. <strong>Empirical Estimates:</strong> Subgroup averages describe the historical sample distribution and do not constitute an individualized clinical prediction or actuarial risk rating.
+  </div>
+
+</body>
+</html>
