@@ -234,31 +234,69 @@ def create_app() -> Flask:
     def api_data():
         """Paginated, filterable, sortable dataset rows."""
         df, _analysis, _report = get_data()
-        filtered = _apply_filters(df, request.args)
 
-        # Allowlisted Sorting
+        # Validate query filters
+        filters, err = _validate_filter_params(request.args)
+        if err:
+            return jsonify({
+                "status": "error",
+                "message": err,
+            }), 400
+
+        # Allowlisted Sorting & order validation
         sort_col = request.args.get("sort", "").strip().lower()
+        if sort_col and sort_col not in config.ALLOWED_SORT_COLUMNS:
+            return jsonify({
+                "status": "error",
+                "message": f"Invalid sort column '{sort_col}'. Allowed columns: {sorted(list(config.ALLOWED_SORT_COLUMNS))}",
+            }), 400
+
         order = request.args.get("order", "asc").strip().lower()
-        if sort_col and sort_col in config.ALLOWED_SORT_COLUMNS and sort_col in filtered.columns:
+        if order and order not in ("asc", "desc"):
+            return jsonify({
+                "status": "error",
+                "message": f"Invalid sort order '{order}'. Must be 'asc' or 'desc'.",
+            }), 400
+
+        # Pagination validation
+        page_raw = request.args.get("page", 1)
+        try:
+            page = int(page_raw)
+            if page < 1:
+                return jsonify({
+                    "status": "error",
+                    "message": f"Page number must be a positive integer, got '{page_raw}'.",
+                }), 400
+        except (ValueError, TypeError):
+            return jsonify({
+                "status": "error",
+                "message": f"Invalid page number '{page_raw}'. Must be an integer.",
+            }), 400
+
+        page_size_raw = request.args.get("page_size", config.DEFAULT_PAGE_SIZE)
+        try:
+            page_size = int(page_size_raw)
+            if page_size < 1 or page_size > config.MAX_PAGE_SIZE:
+                return jsonify({
+                    "status": "error",
+                    "message": f"page_size must be between 1 and {config.MAX_PAGE_SIZE}, got '{page_size_raw}'.",
+                }), 400
+        except (ValueError, TypeError):
+            return jsonify({
+                "status": "error",
+                "message": f"Invalid page_size '{page_size_raw}'. Must be an integer.",
+            }), 400
+
+        filtered = _apply_filters(df, filters)
+
+        # Apply sort if specified
+        if sort_col and sort_col in filtered.columns:
             ascending = order != "desc"
             filtered = filtered.sort_values(by=sort_col, ascending=ascending)
 
-        # Pagination validation
-        try:
-            page = max(1, int(request.args.get("page", 1)))
-        except (ValueError, TypeError):
-            page = 1
-        try:
-            page_size = min(
-                config.MAX_PAGE_SIZE,
-                max(1, int(request.args.get("page_size", config.DEFAULT_PAGE_SIZE))),
-            )
-        except (ValueError, TypeError):
-            page_size = config.DEFAULT_PAGE_SIZE
-
         total_filtered = len(filtered)
         total_pages = max(1, math.ceil(total_filtered / page_size))
-        page = min(page, total_pages)
+        page = min(page, total_pages) if total_filtered > 0 else 1
 
         start = (page - 1) * page_size
         end = start + page_size
@@ -274,7 +312,7 @@ def create_app() -> Flask:
             mean_bmi = (
                 round(float(filtered[config.COLUMN_BMI].mean()), 2)
                 if config.COLUMN_BMI in filtered.columns
-                else 0.0
+                else None
             )
         else:
             mean_charges = None
@@ -285,10 +323,10 @@ def create_app() -> Flask:
             "matched_records": total_filtered,
             "matched_count": total_filtered,
             "average_charges": mean_charges,
-            "mean_charges": mean_charges if mean_charges is not None else 0.0,
-            "median_charges": median_charges if median_charges is not None else 0.0,
+            "mean_charges": mean_charges,
+            "median_charges": median_charges,
             "average_bmi": mean_bmi,
-            "mean_bmi": mean_bmi if mean_bmi is not None else 0.0,
+            "mean_bmi": mean_bmi,
         }
 
         return jsonify({
@@ -301,7 +339,7 @@ def create_app() -> Flask:
             "pages": total_pages,
             "total_pages": total_pages,
             "page_size": page_size,
-            "sort": sort_col if sort_col in config.ALLOWED_SORT_COLUMNS else None,
+            "sort": sort_col if sort_col else None,
             "order": order if order in ("asc", "desc") else "asc",
         })
 
@@ -543,11 +581,32 @@ def create_app() -> Flask:
     def api_download_filtered():
         """Download currently filtered and sorted rows as CSV."""
         df, _analysis, _report = get_data()
-        filtered = _apply_filters(df, request.args)
+
+        # Validate query filters
+        filters, err = _validate_filter_params(request.args)
+        if err:
+            return jsonify({
+                "status": "error",
+                "message": err,
+            }), 400
 
         sort_col = request.args.get("sort", "").strip().lower()
+        if sort_col and sort_col not in config.ALLOWED_SORT_COLUMNS:
+            return jsonify({
+                "status": "error",
+                "message": f"Invalid sort column '{sort_col}'. Allowed columns: {sorted(list(config.ALLOWED_SORT_COLUMNS))}",
+            }), 400
+
         order = request.args.get("order", "asc").strip().lower()
-        if sort_col and sort_col in config.ALLOWED_SORT_COLUMNS and sort_col in filtered.columns:
+        if order and order not in ("asc", "desc"):
+            return jsonify({
+                "status": "error",
+                "message": f"Invalid sort order '{order}'. Must be 'asc' or 'desc'.",
+            }), 400
+
+        filtered = _apply_filters(df, filters)
+
+        if sort_col and sort_col in filtered.columns:
             ascending = order != "desc"
             filtered = filtered.sort_values(by=sort_col, ascending=ascending)
 
@@ -708,6 +767,119 @@ def create_app() -> Flask:
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
+def _validate_filter_params(params: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
+    """Validate query parameters for dataset exploration.
+
+    Returns (validated_dict, error_message). If error_message is not None, request is invalid (HTTP 400).
+    """
+    validated: dict[str, Any] = {}
+
+    # Smoker validation
+    smoker = str(params.get("smoker", "")).strip().lower()
+    if smoker and smoker not in ("", "all", "none"):
+        if smoker not in config.VALID_SMOKER_VALUES:
+            return {}, f"Invalid smoker parameter '{smoker}'. Must be one of: {sorted(list(config.VALID_SMOKER_VALUES))} or 'all'."
+        validated["smoker"] = smoker
+
+    # Sex validation
+    sex = str(params.get("sex", "")).strip().lower()
+    if sex and sex not in ("", "all", "none"):
+        if sex not in config.VALID_SEXES:
+            return {}, f"Invalid sex parameter '{sex}'. Must be one of: {sorted(list(config.VALID_SEXES))} or 'all'."
+        validated["sex"] = sex
+
+    # Region validation
+    region = str(params.get("region", "")).strip().lower()
+    if region and region not in ("", "all", "none"):
+        if region not in config.VALID_REGIONS:
+            return {}, f"Invalid region parameter '{region}'. Must be one of: {sorted(config.VALID_REGIONS)} or 'all'."
+        validated["region"] = region
+
+    # Children validation
+    children_raw = params.get("children", "")
+    if children_raw is not None and str(children_raw).strip().lower() not in ("", "all", "none"):
+        try:
+            ch_val = int(float(str(children_raw).strip()))
+            if ch_val < 0 or ch_val > config.MAX_CHILDREN:
+                return {}, f"Children count must be between 0 and {config.MAX_CHILDREN}."
+            validated["children"] = ch_val
+        except (ValueError, TypeError):
+            return {}, f"Invalid children parameter '{children_raw}'. Must be an integer or 'all'."
+
+    # Numeric Age min/max validation
+    age_min_raw = params.get("age_min")
+    a_min = None
+    if age_min_raw is not None and str(age_min_raw).strip().lower() not in ("", "none", "null"):
+        try:
+            a_min = float(str(age_min_raw).strip())
+            if a_min < 0:
+                return {}, "age_min cannot be negative."
+            validated["age_min"] = a_min
+        except (ValueError, TypeError):
+            return {}, f"Invalid age_min parameter '{age_min_raw}'. Must be a valid number."
+
+    age_max_raw = params.get("age_max")
+    a_max = None
+    if age_max_raw is not None and str(age_max_raw).strip().lower() not in ("", "none", "null"):
+        try:
+            a_max = float(str(age_max_raw).strip())
+            if a_max < 0:
+                return {}, "age_max cannot be negative."
+            validated["age_max"] = a_max
+        except (ValueError, TypeError):
+            return {}, f"Invalid age_max parameter '{age_max_raw}'. Must be a valid number."
+
+    if a_min is not None and a_max is not None and a_min > a_max:
+        return {}, f"Invalid age range: age_min ({a_min}) cannot be greater than age_max ({a_max})."
+
+    # Age band (backwards-compatible)
+    age_band = str(params.get("age_band", "")).strip().lower()
+    if age_band and age_band not in ("", "all", "none"):
+        if age_band not in ("18-29", "30-44", "45-64"):
+            return {}, f"Invalid age_band '{age_band}'. Must be one of: 18-29, 30-44, 45-64, or 'all'."
+        validated["age_band"] = age_band
+
+    # Numeric BMI min/max validation
+    bmi_min_raw = params.get("bmi_min")
+    b_min = None
+    if bmi_min_raw is not None and str(bmi_min_raw).strip().lower() not in ("", "none", "null"):
+        try:
+            b_min = float(str(bmi_min_raw).strip())
+            if b_min < 0:
+                return {}, "bmi_min cannot be negative."
+            validated["bmi_min"] = b_min
+        except (ValueError, TypeError):
+            return {}, f"Invalid bmi_min parameter '{bmi_min_raw}'. Must be a valid number."
+
+    bmi_max_raw = params.get("bmi_max")
+    b_max = None
+    if bmi_max_raw is not None and str(bmi_max_raw).strip().lower() not in ("", "none", "null"):
+        try:
+            b_max = float(str(bmi_max_raw).strip())
+            if b_max < 0:
+                return {}, "bmi_max cannot be negative."
+            validated["bmi_max"] = b_max
+        except (ValueError, TypeError):
+            return {}, f"Invalid bmi_max parameter '{bmi_max_raw}'. Must be a valid number."
+
+    if b_min is not None and b_max is not None and b_min > b_max:
+        return {}, f"Invalid BMI range: bmi_min ({b_min}) cannot be greater than bmi_max ({b_max})."
+
+    # BMI band (backwards-compatible)
+    bmi_band = str(params.get("bmi_band", "")).strip().lower()
+    if bmi_band and bmi_band not in ("", "all", "none"):
+        if bmi_band not in ("<25", "normal", "25-29.9", "overweight", ">=30", "obese"):
+            return {}, f"Invalid bmi_band '{bmi_band}'."
+        validated["bmi_band"] = bmi_band
+
+    # Search query
+    search = str(params.get("search", "")).strip()
+    if search:
+        validated["search"] = search
+
+    return validated, None
+
+
 def _apply_filters(df: pd.DataFrame, params: dict[str, Any]) -> pd.DataFrame:
     """Filter DataFrame by search query, smoker status, region, sex, age, bmi, and children."""
     if df is None or df.empty:
@@ -716,52 +888,37 @@ def _apply_filters(df: pd.DataFrame, params: dict[str, Any]) -> pd.DataFrame:
     filtered = df.copy()
 
     # Smoker filter
-    smoker = str(params.get("smoker", "")).strip().lower()
-    if smoker in config.VALID_SMOKER_VALUES and config.COLUMN_SMOKER in filtered.columns:
+    smoker = params.get("smoker")
+    if smoker and smoker in config.VALID_SMOKER_VALUES and config.COLUMN_SMOKER in filtered.columns:
         filtered = filtered[filtered[config.COLUMN_SMOKER] == smoker]
 
     # Sex filter
-    sex = str(params.get("sex", "")).strip().lower()
-    if sex in config.VALID_SEXES and config.COLUMN_SEX in filtered.columns:
+    sex = params.get("sex")
+    if sex and sex in config.VALID_SEXES and config.COLUMN_SEX in filtered.columns:
         filtered = filtered[filtered[config.COLUMN_SEX] == sex]
 
     # Region filter
-    region = str(params.get("region", "")).strip().lower()
+    region = params.get("region")
     if region and region in config.VALID_REGIONS and config.COLUMN_REGION in filtered.columns:
         filtered = filtered[filtered[config.COLUMN_REGION] == region]
 
     # Children filter
-    children_raw = params.get("children", "")
-    if children_raw is not None and str(children_raw).strip().lower() not in ("", "all", "none"):
-        try:
-            ch_val = int(float(str(children_raw).strip()))
-            if config.COLUMN_CHILDREN in filtered.columns:
-                filtered = filtered[filtered[config.COLUMN_CHILDREN] == ch_val]
-        except (ValueError, TypeError):
-            pass
+    children = params.get("children")
+    if children is not None and config.COLUMN_CHILDREN in filtered.columns:
+        filtered = filtered[filtered[config.COLUMN_CHILDREN] == children]
 
     # Numeric Age min/max filters
     age_min = params.get("age_min")
-    if age_min is not None and str(age_min).strip().lower() not in ("", "none", "null"):
-        try:
-            a_min = float(str(age_min).strip())
-            if config.COLUMN_AGE in filtered.columns:
-                filtered = filtered[filtered[config.COLUMN_AGE] >= a_min]
-        except (ValueError, TypeError):
-            pass
+    if age_min is not None and config.COLUMN_AGE in filtered.columns:
+        filtered = filtered[filtered[config.COLUMN_AGE] >= age_min]
 
     age_max = params.get("age_max")
-    if age_max is not None and str(age_max).strip().lower() not in ("", "none", "null"):
-        try:
-            a_max = float(str(age_max).strip())
-            if config.COLUMN_AGE in filtered.columns:
-                filtered = filtered[filtered[config.COLUMN_AGE] <= a_max]
-        except (ValueError, TypeError):
-            pass
+    if age_max is not None and config.COLUMN_AGE in filtered.columns:
+        filtered = filtered[filtered[config.COLUMN_AGE] <= age_max]
 
     # Age band filter (backwards-compatible)
-    age_band = str(params.get("age_band", "")).strip().lower()
-    if config.COLUMN_AGE in filtered.columns:
+    age_band = params.get("age_band")
+    if age_band and config.COLUMN_AGE in filtered.columns:
         if age_band == "18-29":
             filtered = filtered[(filtered[config.COLUMN_AGE] >= 18) & (filtered[config.COLUMN_AGE] <= 29)]
         elif age_band == "30-44":
@@ -771,26 +928,16 @@ def _apply_filters(df: pd.DataFrame, params: dict[str, Any]) -> pd.DataFrame:
 
     # Numeric BMI min/max filters
     bmi_min = params.get("bmi_min")
-    if bmi_min is not None and str(bmi_min).strip().lower() not in ("", "none", "null"):
-        try:
-            b_min = float(str(bmi_min).strip())
-            if config.COLUMN_BMI in filtered.columns:
-                filtered = filtered[filtered[config.COLUMN_BMI] >= b_min]
-        except (ValueError, TypeError):
-            pass
+    if bmi_min is not None and config.COLUMN_BMI in filtered.columns:
+        filtered = filtered[filtered[config.COLUMN_BMI] >= bmi_min]
 
     bmi_max = params.get("bmi_max")
-    if bmi_max is not None and str(bmi_max).strip().lower() not in ("", "none", "null"):
-        try:
-            b_max = float(str(bmi_max).strip())
-            if config.COLUMN_BMI in filtered.columns:
-                filtered = filtered[filtered[config.COLUMN_BMI] <= b_max]
-        except (ValueError, TypeError):
-            pass
+    if bmi_max is not None and config.COLUMN_BMI in filtered.columns:
+        filtered = filtered[filtered[config.COLUMN_BMI] <= bmi_max]
 
     # BMI band filter (backwards-compatible)
-    bmi_band = str(params.get("bmi_band", "")).strip().lower()
-    if config.COLUMN_BMI in filtered.columns:
+    bmi_band = params.get("bmi_band")
+    if bmi_band and config.COLUMN_BMI in filtered.columns:
         if bmi_band in ("<25", "normal"):
             filtered = filtered[filtered[config.COLUMN_BMI] < 25.0]
         elif bmi_band in ("25-29.9", "overweight"):
@@ -799,12 +946,13 @@ def _apply_filters(df: pd.DataFrame, params: dict[str, Any]) -> pd.DataFrame:
             filtered = filtered[filtered[config.COLUMN_BMI] >= 30.0]
 
     # Search filter (across text & numeric columns)
-    search = str(params.get("search", "")).strip().lower()
+    search = params.get("search")
     if search:
+        search_lower = str(search).lower()
         masks = []
         for col in filtered.columns:
             masks.append(
-                filtered[col].astype(str).str.lower().str.contains(search, regex=False)
+                filtered[col].astype(str).str.lower().str.contains(search_lower, regex=False)
             )
         combined_mask = pd.concat(masks, axis=1).any(axis=1)
         filtered = filtered[combined_mask]

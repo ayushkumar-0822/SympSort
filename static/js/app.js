@@ -264,7 +264,7 @@
     const text = elements.statusPill.querySelector(".status-text");
 
     let isConnected = false;
-    let rows = 1338;
+    let rows = null;
 
     try {
       const res = await fetch("/api/health");
@@ -282,15 +282,17 @@
       if (embeddedEl && embeddedEl.textContent.trim()) {
         try {
           const s = JSON.parse(embeddedEl.textContent);
-          if (s && s.total_valid_records) rows = s.total_valid_records;
-          isConnected = true;
+          if (s && typeof s.total_valid_records === "number") {
+            rows = s.total_valid_records;
+            isConnected = true;
+          }
         } catch {}
       }
     }
 
     if (isConnected) {
       if (dot) dot.className = "status-dot status-dot--connected";
-      if (text) text.textContent = `Connected (${NUMBER.format(rows)} rows)`;
+      if (text) text.textContent = rows != null ? `Connected (${NUMBER.format(rows)} rows)` : "Connected";
     } else {
       if (dot) dot.className = "status-dot status-dot--offline";
       if (text) text.textContent = "Offline";
@@ -394,26 +396,37 @@
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, cssWidth, cssHeight);
 
-    // Statistical figures from Pandas groupby
-    const nsMean = data?.non_smoker_mean || 8434.27;
-    const smMean = data?.smoker_mean || 32050.23;
-    const nsStd = data?.non_smoker_std || 5993.78;
-    const smStd = data?.smoker_std || 11541.56;
-    const nsCount = data?.non_smoker_count || 1064;
-    const smCount = data?.smoker_count || 274;
+    // Validate that required summary means are present
+    const hasData =
+      data &&
+      typeof data.non_smoker_mean === "number" &&
+      typeof data.smoker_mean === "number" &&
+      !isNaN(data.non_smoker_mean) &&
+      !isNaN(data.smoker_mean);
 
-    // 95% Confidence Interval: SE = std / sqrt(n), CI = 1.96 * SE
-    const nsSE = nsStd / Math.sqrt(Math.max(1, nsCount));
-    const smSE = smStd / Math.sqrt(Math.max(1, smCount));
-    const nsCI = 1.96 * nsSE;
-    const smCI = 1.96 * smSE;
+    if (!hasData) {
+      ctx.fillStyle = textSec;
+      ctx.font = "14px system-ui, -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("Statistical summary data unavailable.", cssWidth / 2, cssHeight / 2);
+      return;
+    }
+
+    const nsMean = data.non_smoker_mean;
+    const smMean = data.smoker_mean;
+    const nsCount = typeof data.non_smoker_count === "number" ? data.non_smoker_count : null;
+    const smCount = typeof data.smoker_count === "number" ? data.smoker_count : null;
+
+    // Use genuine calculated confidence interval margins from backend (derived from Student's t critical values)
+    const nsCI = typeof data.non_smoker_ci_margin === "number" && !isNaN(data.non_smoker_ci_margin) ? data.non_smoker_ci_margin : null;
+    const smCI = typeof data.smoker_ci_margin === "number" && !isNaN(data.smoker_ci_margin) ? data.smoker_ci_margin : null;
 
     // Plot geometry
     const margin = { top: 55, right: 35, bottom: 65, left: 80 };
     const plotWidth = Math.max(100, cssWidth - margin.left - margin.right);
     const plotHeight = Math.max(100, cssHeight - margin.top - margin.bottom);
 
-    const maxVal = 40000;
+    const maxVal = Math.max(40000, (smMean + (smCI || 0)) * 1.15);
     const scaleY = (val) => margin.top + plotHeight - (val / maxVal) * plotHeight;
 
     // Chart Title
@@ -477,38 +490,43 @@
         ctx.fillRect(bar.x, barTop, barWidth, barHeight);
       }
 
-      // Draw 95% CI Error Whisker
-      const ciTop = scaleY(bar.mean + bar.ci);
-      const ciBottom = scaleY(bar.mean - bar.ci);
-      const centerX = bar.x + barWidth / 2;
-      const capWidth = 18;
+      // Draw 95% CI Error Whisker if genuinely calculated
+      let labelY = barTop - 10;
+      if (bar.ci != null && bar.ci > 0) {
+        const ciTop = scaleY(bar.mean + bar.ci);
+        const ciBottom = scaleY(bar.mean - bar.ci);
+        const centerX = bar.x + barWidth / 2;
+        const capWidth = 18;
 
-      ctx.strokeStyle = textColor;
-      ctx.lineWidth = 1.8;
+        ctx.strokeStyle = textColor;
+        ctx.lineWidth = 1.8;
 
-      // Vertical line
-      ctx.beginPath();
-      ctx.moveTo(centerX, ciTop);
-      ctx.lineTo(centerX, ciBottom);
-      ctx.stroke();
+        // Vertical line
+        ctx.beginPath();
+        ctx.moveTo(centerX, ciTop);
+        ctx.lineTo(centerX, ciBottom);
+        ctx.stroke();
 
-      // Top cap
-      ctx.beginPath();
-      ctx.moveTo(centerX - capWidth / 2, ciTop);
-      ctx.lineTo(centerX + capWidth / 2, ciTop);
-      ctx.stroke();
+        // Top cap
+        ctx.beginPath();
+        ctx.moveTo(centerX - capWidth / 2, ciTop);
+        ctx.lineTo(centerX + capWidth / 2, ciTop);
+        ctx.stroke();
 
-      // Bottom cap
-      ctx.beginPath();
-      ctx.moveTo(centerX - capWidth / 2, ciBottom);
-      ctx.lineTo(centerX + capWidth / 2, ciBottom);
-      ctx.stroke();
+        // Bottom cap
+        ctx.beginPath();
+        ctx.moveTo(centerX - capWidth / 2, ciBottom);
+        ctx.lineTo(centerX + capWidth / 2, ciBottom);
+        ctx.stroke();
+
+        labelY = Math.min(barTop, ciTop) - 10;
+      }
 
       // Dollar label above bar
       ctx.fillStyle = textColor;
       ctx.font = "bold 13px system-ui, sans-serif";
       ctx.textAlign = "center";
-      const labelY = Math.min(barTop, ciTop) - 10;
+      const centerX = bar.x + barWidth / 2;
       ctx.fillText(CURRENCY.format(bar.mean), centerX, labelY);
 
       // X-Axis Category Label
@@ -516,9 +534,15 @@
       ctx.fillText(bar.label, centerX, margin.top + plotHeight + 24);
 
       // Group count subtext
-      ctx.font = "11px system-ui, sans-serif";
-      ctx.fillStyle = textSec;
-      ctx.fillText(`(n = ${NUMBER.format(bar.count)})`, centerX, margin.top + plotHeight + 42);
+      if (bar.count != null) {
+        ctx.font = "11px system-ui, sans-serif";
+        ctx.fillStyle = textSec;
+        ctx.fillText(`(n = ${NUMBER.format(bar.count)})`, centerX, margin.top + plotHeight + 42);
+      } else {
+        ctx.font = "11px system-ui, sans-serif";
+        ctx.fillStyle = textSec;
+        ctx.fillText("(n = —)", centerX, margin.top + plotHeight + 42);
+      }
     });
 
     // X-Axis baseline
@@ -686,46 +710,65 @@
 
       // Populate Overview
       if (elements.findingLine) {
-        const mult = data.multiplier ? `${data.multiplier.toFixed(1)}×` : "3.8×";
-        elements.findingLine.innerHTML = `Smokers are charged about <strong>${mult} more</strong> on average: <strong>${CURRENCY.format(data.smoker_mean)}</strong> vs <strong>${CURRENCY.format(data.non_smoker_mean)}</strong>.`;
+        if (data.multiplier != null && data.smoker_mean != null && data.non_smoker_mean != null) {
+          const mult = `${data.multiplier.toFixed(1)}×`;
+          elements.findingLine.innerHTML = `Smokers are charged about <strong>${mult} more</strong> on average: <strong>${CURRENCY.format(data.smoker_mean)}</strong> vs <strong>${CURRENCY.format(data.non_smoker_mean)}</strong>.`;
+        } else if (data.smoker_mean != null && data.non_smoker_mean != null) {
+          elements.findingLine.innerHTML = `Smoker average: <strong>${CURRENCY.format(data.smoker_mean)}</strong> vs Non-Smoker average: <strong>${CURRENCY.format(data.non_smoker_mean)}</strong>.`;
+        } else {
+          elements.findingLine.textContent = "Smoker vs non-smoker empirical insurance charge comparison.";
+        }
       }
 
       if (!state.hasAnimatedNumbers) {
-        animateValue(elements.kpiNonSmoker, 0, data.non_smoker_mean);
-        animateValue(elements.kpiSmoker, 0, data.smoker_mean);
+        if (typeof data.non_smoker_mean === "number") animateValue(elements.kpiNonSmoker, 0, data.non_smoker_mean);
+        else if (elements.kpiNonSmoker) elements.kpiNonSmoker.textContent = "—";
+
+        if (typeof data.smoker_mean === "number") animateValue(elements.kpiSmoker, 0, data.smoker_mean);
+        else if (elements.kpiSmoker) elements.kpiSmoker.textContent = "—";
+
         state.hasAnimatedNumbers = true;
       } else {
-        if (elements.kpiNonSmoker) elements.kpiNonSmoker.textContent = CURRENCY.format(data.non_smoker_mean);
-        if (elements.kpiSmoker) elements.kpiSmoker.textContent = CURRENCY.format(data.smoker_mean);
+        if (elements.kpiNonSmoker) {
+          elements.kpiNonSmoker.textContent = typeof data.non_smoker_mean === "number" ? CURRENCY.format(data.non_smoker_mean) : "—";
+        }
+        if (elements.kpiSmoker) {
+          elements.kpiSmoker.textContent = typeof data.smoker_mean === "number" ? CURRENCY.format(data.smoker_mean) : "—";
+        }
       }
 
       if (elements.diffAbs) {
-        elements.diffAbs.textContent = `+${CURRENCY.format(data.absolute_difference)}`;
+        elements.diffAbs.textContent = typeof data.absolute_difference === "number" ? `+${CURRENCY.format(data.absolute_difference)}` : "—";
       }
       if (elements.diffBadge) {
-        const pct = data.percentage_difference != null ? data.percentage_difference.toFixed(1) : "280.0";
-        elements.diffBadge.textContent = `+${pct}%`;
+        elements.diffBadge.textContent = typeof data.percentage_difference === "number" ? `+${data.percentage_difference.toFixed(1)}%` : "—";
       }
 
       // Populate P1 Secondary KPI Strip
       if (elements.kpiMultiplier) {
-        elements.kpiMultiplier.textContent = (data.multiplier ? data.multiplier.toFixed(2) : "3.80") + "×";
+        elements.kpiMultiplier.textContent = typeof data.multiplier === "number" ? `${data.multiplier.toFixed(2)}×` : "—";
       }
       if (elements.kpiNonSmokerCount) {
-        elements.kpiNonSmokerCount.textContent = `n = ${NUMBER.format(data.non_smoker_count || 1064)}`;
+        elements.kpiNonSmokerCount.textContent = typeof data.non_smoker_count === "number" ? `n = ${NUMBER.format(data.non_smoker_count)}` : "n = —";
       }
       if (elements.kpiSmokerCount) {
-        const total = data.total_valid_records || (data.smoker_count + data.non_smoker_count) || 1338;
-        const pct = (( (data.smoker_count || 274) / total ) * 100).toFixed(1);
-        elements.kpiSmokerCount.textContent = `n = ${NUMBER.format(data.smoker_count || 274)} (${pct}% of records)`;
+        if (typeof data.smoker_count === "number") {
+          const total = typeof data.total_valid_records === "number"
+            ? data.total_valid_records
+            : (typeof data.non_smoker_count === "number" ? data.smoker_count + data.non_smoker_count : null);
+          const pct = total && total > 0 ? ` (${((data.smoker_count / total) * 100).toFixed(1)}% of records)` : "";
+          elements.kpiSmokerCount.textContent = `n = ${NUMBER.format(data.smoker_count)}${pct}`;
+        } else {
+          elements.kpiSmokerCount.textContent = "n = —";
+        }
       }
       if (elements.kpiValidCount) {
-        elements.kpiValidCount.textContent = NUMBER.format(data.total_valid_records || 1338);
+        elements.kpiValidCount.textContent = typeof data.total_valid_records === "number" ? NUMBER.format(data.total_valid_records) : "—";
       }
 
       // Populate Methodology live output
       if (elements.groupbyOutput) {
-        elements.groupbyOutput.textContent = data.groupby_text || "smoker\nno      8434.27\nyes    32050.23\nName: charges, dtype: float64";
+        elements.groupbyOutput.textContent = data.groupby_text || "No groupby output available.";
       }
 
       // Populate Detailed Stats Table
@@ -733,13 +776,13 @@
 
       // Populate P2 Statistical Significance Card
       if (elements.statTVal) {
-        elements.statTVal.textContent = "t = " + (data.t_statistic != null ? data.t_statistic.toFixed(2) : "32.75");
+        elements.statTVal.textContent = typeof data.t_statistic === "number" ? `t = ${data.t_statistic.toFixed(2)}` : "t = —";
       }
       if (elements.statMWVal) {
-        elements.statMWVal.textContent = data.mann_whitney_p_value || "p < 0.001";
+        elements.statMWVal.textContent = data.mann_whitney_p_value ? String(data.mann_whitney_p_value) : "—";
       }
       if (elements.statCohenVal) {
-        elements.statCohenVal.textContent = "d = " + (data.cohen_d != null ? data.cohen_d.toFixed(2) : "3.16");
+        elements.statCohenVal.textContent = typeof data.cohen_d === "number" ? `d = ${data.cohen_d.toFixed(2)}` : "d = —";
       }
       if (elements.statCautionNote && data.stat_takeaway) {
         elements.statCautionNote.innerHTML = `<strong>Statistical Verification:</strong> ${data.stat_takeaway}`;
@@ -777,25 +820,57 @@
   function populateStatsTable(data) {
     if (!elements.statsBody) return;
 
-    const nsMargin = data.non_smoker_ci_margin != null ? CURRENCY.format(data.non_smoker_ci_margin) : "$360.15";
-    const smMargin = data.smoker_ci_margin != null ? CURRENCY.format(data.smoker_ci_margin) : "$1,366.61";
-    const nsLow = data.non_smoker_ci_low != null ? CURRENCY.format(data.non_smoker_ci_low) : "$8,074.12";
-    const nsHigh = data.non_smoker_ci_high != null ? CURRENCY.format(data.non_smoker_ci_high) : "$8,794.42";
-    const smLow = data.smoker_ci_low != null ? CURRENCY.format(data.smoker_ci_low) : "$30,683.62";
-    const smHigh = data.smoker_ci_high != null ? CURRENCY.format(data.smoker_ci_high) : "$33,416.84";
+    const formatOrDash = (val, isCurrency = true) => {
+      if (val == null || (typeof val === "number" && isNaN(val))) return "—";
+      return isCurrency ? CURRENCY.format(val) : NUMBER.format(val);
+    };
+
+    const buildCiCell = (mean, margin, low, high) => {
+      if (mean == null || margin == null) return "—";
+      const meanStr = CURRENCY.format(mean);
+      const marginStr = CURRENCY.format(margin);
+      const lowStr = low != null ? CURRENCY.format(low) : "—";
+      const highStr = high != null ? CURRENCY.format(high) : "—";
+      const titleAttr = data.ci_method || "95% Confidence Interval";
+      return `<span title="${titleAttr}">${meanStr} ± ${marginStr}<br><small class="text-tertiary">[${lowStr} – ${highStr}]</small></span>`;
+    };
 
     const rows = [
-      { label: "Sample Count (n)", ns: NUMBER.format(data.non_smoker_count || 1064), sm: NUMBER.format(data.smoker_count || 274) },
-      { label: "Mean Charge", ns: CURRENCY.format(data.non_smoker_mean), sm: CURRENCY.format(data.smoker_mean) },
+      {
+        label: "Sample Count (n)",
+        ns: data.non_smoker_count != null ? NUMBER.format(data.non_smoker_count) : "—",
+        sm: data.smoker_count != null ? NUMBER.format(data.smoker_count) : "—",
+      },
+      {
+        label: "Mean Charge",
+        ns: formatOrDash(data.non_smoker_mean),
+        sm: formatOrDash(data.smoker_mean),
+      },
       {
         label: "95% Confidence Interval",
-        ns: `<span title="${data.ci_method || "Student's t / Normal distribution (95% CI)"}">${CURRENCY.format(data.non_smoker_mean)} ± ${nsMargin}<br><small class="text-tertiary">[${nsLow} – ${nsHigh}]</small></span>`,
-        sm: `<span title="${data.ci_method || "Student's t / Normal distribution (95% CI)"}">${CURRENCY.format(data.smoker_mean)} ± ${smMargin}<br><small class="text-tertiary">[${smLow} – ${smHigh}]</small></span>`,
+        ns: buildCiCell(data.non_smoker_mean, data.non_smoker_ci_margin, data.non_smoker_ci_low, data.non_smoker_ci_high),
+        sm: buildCiCell(data.smoker_mean, data.smoker_ci_margin, data.smoker_ci_low, data.smoker_ci_high),
       },
-      { label: "Median Charge", ns: CURRENCY.format(data.non_smoker_median), sm: CURRENCY.format(data.smoker_median) },
-      { label: "Std Deviation", ns: CURRENCY.format(data.non_smoker_std), sm: CURRENCY.format(data.smoker_std) },
-      { label: "Minimum Charge", ns: CURRENCY.format(data.non_smoker_min), sm: CURRENCY.format(data.smoker_min) },
-      { label: "Maximum Charge", ns: CURRENCY.format(data.non_smoker_max), sm: CURRENCY.format(data.smoker_max) },
+      {
+        label: "Median Charge",
+        ns: formatOrDash(data.non_smoker_median),
+        sm: formatOrDash(data.smoker_median),
+      },
+      {
+        label: "Std Deviation",
+        ns: formatOrDash(data.non_smoker_std),
+        sm: formatOrDash(data.smoker_std),
+      },
+      {
+        label: "Minimum Charge",
+        ns: formatOrDash(data.non_smoker_min),
+        sm: formatOrDash(data.smoker_min),
+      },
+      {
+        label: "Maximum Charge",
+        ns: formatOrDash(data.non_smoker_max),
+        sm: formatOrDash(data.smoker_max),
+      },
     ];
 
     elements.statsBody.innerHTML = rows
@@ -926,9 +1001,12 @@
     loadExplorerData();
   }
 
+  let explorerRequestSeq = 0;
+
   async function loadExplorerData() {
     if (!elements.explorerBody) return;
     state.explorer.isLoading = true;
+    const thisRequestSeq = ++explorerRequestSeq;
 
     const params = new URLSearchParams({
       page: state.explorer.page,
@@ -947,8 +1025,20 @@
 
     try {
       const res = await fetch(`/api/data?${params.toString()}`);
-      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+      if (!res.ok) {
+        let errMsg = `Server returned status ${res.status}`;
+        try {
+          const errData = await res.json();
+          if (errData && errData.message) errMsg = errData.message;
+        } catch (_) {}
+        throw new Error(errMsg);
+      }
       const data = await res.json();
+
+      // Discard stale response if a newer query has already been dispatched
+      if (thisRequestSeq !== explorerRequestSeq) {
+        return;
+      }
 
       state.explorer.totalFiltered = data.total_filtered || 0;
       state.explorer.totalPages = data.pages || 1;
@@ -971,41 +1061,45 @@
 
       // Update live selection summary strip
       if (data.selection_summary) {
-        if (elements.selCount) elements.selCount.textContent = `${NUMBER.format(data.selection_summary.matched_count)} rows`;
-        if (elements.selMean) elements.selMean.textContent = CURRENCY.format(data.selection_summary.mean_charges);
-        if (elements.selMedian) elements.selMedian.textContent = CURRENCY.format(data.selection_summary.median_charges);
-        if (elements.selBmi) elements.selBmi.textContent = data.selection_summary.mean_bmi ? Number(data.selection_summary.mean_bmi).toFixed(2) : "—";
+        const sel = data.selection_summary;
+        if (elements.selCount) {
+          elements.selCount.textContent = sel.matched_count != null ? `${NUMBER.format(sel.matched_count)} rows` : "0 rows";
+        }
+        if (elements.selMean) {
+          elements.selMean.textContent = sel.mean_charges != null ? CURRENCY.format(sel.mean_charges) : "—";
+        }
+        if (elements.selMedian) {
+          elements.selMedian.textContent = sel.median_charges != null ? CURRENCY.format(sel.median_charges) : "—";
+        }
+        if (elements.selBmi) {
+          elements.selBmi.textContent = sel.mean_bmi != null && !isNaN(sel.mean_bmi) ? Number(sel.mean_bmi).toFixed(2) : "—";
+        }
       }
 
       renderExplorerRows(data.records || []);
       renderPagination();
       renderShowingText(data);
     } catch (err) {
-      const sampleEl = document.getElementById("serverSampleData");
-      if (sampleEl && sampleEl.textContent.trim()) {
-        try {
-          const sampleRecords = JSON.parse(sampleEl.textContent);
-          if (sampleRecords && sampleRecords.length) {
-            state.explorer.totalFiltered = 1338;
-            state.explorer.totalPages = Math.ceil(1338 / state.explorer.pageSize);
-            state.explorer.page = 1;
-            renderExplorerRows(sampleRecords.slice(0, state.explorer.pageSize));
-            renderPagination();
-            renderShowingText({
-              total_filtered: 1338,
-              total_records: 1338,
-              page: 1,
-              pages: Math.ceil(1338 / state.explorer.pageSize),
-              page_size: state.explorer.pageSize,
-            });
-            return;
-          }
-        } catch (e) {}
+      if (thisRequestSeq !== explorerRequestSeq) {
+        return;
       }
       loggerError("Failed to load explorer data", err);
-      elements.explorerBody.innerHTML = `<tr><td colspan="${COLUMNS.length}" class="table-error">Failed to load data. Please retry.</td></tr>`;
+      if (elements.explorerEmpty) elements.explorerEmpty.classList.add("hidden");
+      elements.explorerBody.innerHTML = `<tr><td colspan="${COLUMNS.length}" class="table-error"><div style="display:flex;align-items:center;justify-content:center;gap:0.75rem;padding:1rem 0;"><span>Failed to load data: ${err.message || "Connection error."}</span><button type="button" class="btn-text" id="explorerRetryBtn" style="text-decoration:underline;cursor:pointer;">Retry</button></div></td></tr>`;
+      const retryBtn = document.getElementById("explorerRetryBtn");
+      if (retryBtn) {
+        retryBtn.addEventListener("click", () => loadExplorerData());
+      }
+      if (elements.showingText) elements.showingText.textContent = "Error loading records";
+      if (elements.pagination) elements.pagination.innerHTML = "";
+      if (elements.selCount) elements.selCount.textContent = "—";
+      if (elements.selMean) elements.selMean.textContent = "—";
+      if (elements.selMedian) elements.selMedian.textContent = "—";
+      if (elements.selBmi) elements.selBmi.textContent = "—";
     } finally {
-      state.explorer.isLoading = false;
+      if (thisRequestSeq === explorerRequestSeq) {
+        state.explorer.isLoading = false;
+      }
     }
   }
 
@@ -1461,10 +1555,13 @@
       state.dataQualityLoaded = true;
 
       const val = data.validation || {};
-      if (elements.auditRawRows) elements.auditRawRows.textContent = NUMBER.format(val.total_raw_rows || 1338);
-      if (elements.auditValidRows) elements.auditValidRows.textContent = NUMBER.format(val.valid_rows || 1338);
-      if (elements.auditExcludedRows) elements.auditExcludedRows.textContent = NUMBER.format(val.excluded_rows || 0);
-      if (elements.auditNulls) elements.auditNulls.textContent = NUMBER.format((val.null_charges_count || 0) + (val.invalid_smoker_count || 0));
+      if (elements.auditRawRows) elements.auditRawRows.textContent = val.total_raw_rows != null ? NUMBER.format(val.total_raw_rows) : "—";
+      if (elements.auditValidRows) elements.auditValidRows.textContent = val.valid_rows != null ? NUMBER.format(val.valid_rows) : "—";
+      if (elements.auditExcludedRows) elements.auditExcludedRows.textContent = val.excluded_rows != null ? NUMBER.format(val.excluded_rows) : "—";
+      if (elements.auditNulls) {
+        const nullCount = (val.null_charges_count || 0) + (val.invalid_smoker_count || 0);
+        elements.auditNulls.textContent = NUMBER.format(nullCount);
+      }
 
       // Describe output format
       if (elements.auditDescribeOutput && data.describe) {
@@ -1503,8 +1600,10 @@
 
       // Info output format
       if (elements.auditInfoOutput && data.columns) {
-        let out = "<class 'pandas.core.frame.DataFrame'>\nRangeIndex: 1338 entries, 0 to 1337\n";
-        out += "Data columns (total 8 columns):\n";
+        const totalRows = val.total_raw_rows != null ? val.total_raw_rows : (data.columns[0]?.non_null_count || 0);
+        const maxIdx = totalRows > 0 ? totalRows - 1 : 0;
+        let out = `<class 'pandas.core.frame.DataFrame'>\nRangeIndex: ${totalRows} entries, 0 to ${maxIdx}\n`;
+        out += `Data columns (total ${data.columns.length} columns):\n`;
         out += " #   Column        Non-Null Count  Dtype\n";
         out += "---  ------        --------------  -----\n";
         data.columns.forEach((col, idx) => {
@@ -1588,7 +1687,8 @@
           elements.reloadBtn.textContent = "Reloading…";
           const res = await fetch("/api/reload", { method: "POST" });
           const data = await res.json();
-          showToast(data.message || `Reloaded ${data.rows || 1338} rows`);
+          const countMsg = typeof data.rows === "number" ? `Reloaded ${NUMBER.format(data.rows)} rows` : "Reloaded dataset";
+          showToast(data.message || countMsg);
           await loadSummaryData();
           if (state.currentView === "explorer") {
             loadExplorerData();

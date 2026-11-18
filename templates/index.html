@@ -407,12 +407,12 @@
                     <div class="cohort-metrics-card">
                       <div class="cohort-metric-main">
                         <span class="cohort-metric-label">Cohort A Mean</span>
-                        <span class="cohort-metric-val font-tabular" id="scenMeanA">$8,434.27</span>
-                        <span class="cohort-metric-sub" id="scenCountA">n = 1,064 records</span>
+                        <span class="cohort-metric-val font-tabular" id="scenMeanA">—</span>
+                        <span class="cohort-metric-sub" id="scenCountA">n = —</span>
                       </div>
                       <div class="cohort-submetrics">
-                        <div><span>Median:</span> <strong id="scenMedianA">$7,345.41</strong></div>
-                        <div><span>95% CI:</span> <strong id="scenCiA">±$359.88</strong></div>
+                        <div><span>Median:</span> <strong id="scenMedianA">—</strong></div>
+                        <div><span>95% CI:</span> <strong id="scenCiA">—</strong></div>
                       </div>
                     </div>
                   </div>
@@ -472,12 +472,12 @@
                     <div class="cohort-metrics-card">
                       <div class="cohort-metric-main">
                         <span class="cohort-metric-label">Cohort B Mean</span>
-                        <span class="cohort-metric-val font-tabular" id="scenMeanB">$32,050.23</span>
-                        <span class="cohort-metric-sub" id="scenCountB">n = 274 records</span>
+                        <span class="cohort-metric-val font-tabular" id="scenMeanB">—</span>
+                        <span class="cohort-metric-sub" id="scenCountB">n = —</span>
                       </div>
                       <div class="cohort-submetrics">
-                        <div><span>Median:</span> <strong id="scenMedianB">$34,456.35</strong></div>
-                        <div><span>95% CI:</span> <strong id="scenCiB">±$1,368.53</strong></div>
+                        <div><span>Median:</span> <strong id="scenMedianB">—</strong></div>
+                        <div><span>95% CI:</span> <strong id="scenCiB">—</strong></div>
                       </div>
                     </div>
                   </div>
@@ -488,24 +488,24 @@
                   <div class="delta-headline-row">
                     <div class="delta-stat">
                       <span class="delta-label">Mean Difference (B − A)</span>
-                      <span class="delta-val font-tabular" id="scenDiffMean">+$23,615.96</span>
+                      <span class="delta-val font-tabular" id="scenDiffMean">—</span>
                     </div>
                     <div class="delta-stat">
                       <span class="delta-label">Relative Shift</span>
-                      <span class="delta-badge" id="scenPctBadge">+280.0%</span>
+                      <span class="delta-badge" id="scenPctBadge">—</span>
                     </div>
                     <div class="delta-stat">
                       <span class="delta-label">Cost Multiplier</span>
-                      <span class="delta-val font-tabular" id="scenMultiplier">3.80×</span>
+                      <span class="delta-val font-tabular" id="scenMultiplier">—</span>
                     </div>
                     <div class="delta-stat">
                       <span class="delta-label">Welch's t-test</span>
-                      <span class="delta-val font-tabular" id="scenTStat">t = 32.75, p &lt; 0.001</span>
+                      <span class="delta-val font-tabular" id="scenTStat">—</span>
                     </div>
                   </div>
 
                   <p class="scenario-statement" id="scenStatement">
-                    In this observational dataset, Cohort B averages $32,050.23 vs $8,434.27 for Cohort A (+$23,615.96, +280.0%). This demonstrates empirical subgroup distribution and does not constitute an individual health risk prediction.
+                    Select parameters above to compare empirical cohorts.
                   </p>
                   <div class="scenario-warning hidden" id="scenWarning"></div>
                 </div>
@@ -528,9 +528,9 @@
               </div>
               <div class="control-group control-group--filters">
                 <div class="smoker-pills" id="smokerPills" role="radiogroup" aria-label="Filter by smoking status">
-                  <button type="button" class="smoker-pill active" data-smoker="" role="radio" aria-checked="true">All (1,338)</button>
-                  <button type="button" class="smoker-pill" data-smoker="no" role="radio" aria-checked="false">Non-smokers (1,064)</button>
-                  <button type="button" class="smoker-pill" data-smoker="yes" role="radio" aria-checked="false">Smokers (274)</button>
+                  <button type="button" class="smoker-pill active" data-smoker="" role="radio" aria-checked="true">All</button>
+                  <button type="button" class="smoker-pill" data-smoker="no" role="radio" aria-checked="false">Non-smokers</button>
+                  <button type="button" class="smoker-pill" data-smoker="yes" role="radio" aria-checked="false">Smokers</button>
                 </div>
                 <!-- Hidden fallback select for programmatic compatibility -->
                 <select class="filter-select hidden" id="smokerFilter" aria-label="Filter by smoker status">
@@ -579,19 +579,19 @@
             <div class="selection-summary-strip" id="selectionSummaryStrip">
               <div class="selection-metric">
                 <span class="sel-label">Matched Records</span>
-                <span class="sel-val font-tabular" id="selCount">1,338 rows</span>
+                <span class="sel-val font-tabular" id="selCount">—</span>
               </div>
               <div class="selection-metric">
                 <span class="sel-label">Mean Charge</span>
-                <span class="sel-val font-tabular" id="selMean">$13,270.42</span>
+                <span class="sel-val font-tabular" id="selMean">—</span>
               </div>
               <div class="selection-metric">
                 <span class="sel-label">Median Charge</span>
-                <span class="sel-val font-tabular" id="selMedian">$9,382.03</span>
+                <span class="sel-val font-tabular" id="selMedian">—</span>
               </div>
               <div class="selection-metric">
                 <span class="sel-label">Mean BMI</span>
-                <span class="sel-val font-tabular" id="selBmi">30.66</span>
+                <span class="sel-val font-tabular" id="selBmi">—</span>
               </div>
             </div>
 
@@ -686,24 +686,24 @@ plt.show()</code></pre>
             <div class="quality-audit-card" id="qualityAuditCard">
               <div class="section-header-row">
                 <h2 class="section-subheading">Data Quality &amp; Ingestion Audit</h2>
-                <span class="quality-pill" id="auditStatusPill">Validated (1,338 rows)</span>
+                <span class="quality-pill" id="auditStatusPill">Validated</span>
               </div>
               <div class="quality-audit-grid">
                 <div class="quality-cell">
                   <span class="quality-label">Raw Rows Ingested</span>
-                  <span class="quality-val font-tabular" id="auditRawRows">1,338</span>
+                  <span class="quality-val font-tabular" id="auditRawRows">—</span>
                 </div>
                 <div class="quality-cell">
                   <span class="quality-label">Valid Actuarial Rows</span>
-                  <span class="quality-val font-tabular" id="auditValidRows">1,338</span>
+                  <span class="quality-val font-tabular" id="auditValidRows">—</span>
                 </div>
                 <div class="quality-cell">
                   <span class="quality-label">Excluded / Corrupt</span>
-                  <span class="quality-val font-tabular" id="auditExcludedRows">0</span>
+                  <span class="quality-val font-tabular" id="auditExcludedRows">—</span>
                 </div>
                 <div class="quality-cell">
                   <span class="quality-label">Null Charges / Smoker</span>
-                  <span class="quality-val font-tabular" id="auditNulls">0</span>
+                  <span class="quality-val font-tabular" id="auditNulls">—</span>
                 </div>
               </div>
 

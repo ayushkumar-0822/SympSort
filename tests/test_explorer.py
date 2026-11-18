@@ -115,7 +115,7 @@ def test_combined_multi_criteria_filtering(client):
 # ── 7. Allowlisted sorting & invalid column rejection ──────────────────────────
 
 def test_allowlisted_sorting(client):
-    """Sorting works for allowlisted columns and falls back safely on invalid ones."""
+    """Sorting works for allowlisted columns and rejects invalid columns with 400."""
     # Ascending sort by charges
     res_asc = client.get("/api/data?sort=charges&order=asc&page_size=5")
     assert res_asc.status_code == 200
@@ -128,21 +128,30 @@ def test_allowlisted_sorting(client):
     records_desc = res_desc.get_json()["records"]
     assert records_desc[0]["charges"] >= records_desc[-1]["charges"]
 
-    # Invalid column (SQL injection or unknown expression) is ignored, no 500 error
+    # Invalid column (SQL injection or unknown expression) is rejected with HTTP 400
     res_bad = client.get("/api/data?sort=id;DROP%20TABLE%20users--&order=asc")
-    assert res_bad.status_code == 200
+    assert res_bad.status_code == 400
     data_bad = res_bad.get_json()
-    assert data_bad["sort"] is None  # Invalid sort rejected safely
+    assert data_bad["status"] == "error"
+    assert "Invalid sort column" in data_bad["message"]
+
+    # Invalid order is rejected with HTTP 400
+    res_bad_order = client.get("/api/data?sort=charges&order=sideways")
+    assert res_bad_order.status_code == 400
+    assert "Invalid sort order" in res_bad_order.get_json()["message"]
 
 
-# ── 8. Pagination clamping & stability ─────────────────────────────────────────
+# ── 8. Pagination validation & boundaries ──────────────────────────────────────
 
 def test_pagination_boundaries(client):
-    """Page and page_size values are properly clamped."""
-    # Negative page is clamped to 1
+    """Page and page_size values are validated and clamped."""
+    # Non-integer page returns HTTP 400
+    res_str = client.get("/api/data?page=abc")
+    assert res_str.status_code == 400
+
+    # Page < 1 returns HTTP 400
     res_neg = client.get("/api/data?page=-5&page_size=10")
-    assert res_neg.status_code == 200
-    assert res_neg.get_json()["page"] == 1
+    assert res_neg.status_code == 400
 
     # Oversized page number is clamped to total_pages
     res_over = client.get("/api/data?page=9999&page_size=50")
@@ -150,10 +159,10 @@ def test_pagination_boundaries(client):
     data_over = res_over.get_json()
     assert data_over["page"] == data_over["pages"]
 
-    # Page size cannot exceed MAX_PAGE_SIZE (200)
+    # Page size > MAX_PAGE_SIZE (200) returns HTTP 400
     res_size = client.get("/api/data?page_size=500")
-    assert res_size.status_code == 200
-    assert res_size.get_json()["page_size"] <= 200
+    assert res_size.status_code == 400
+    assert "page_size must be between 1 and 200" in res_size.get_json()["message"]
 
 
 # ── 9. Selection summary computed over entire filtered set ─────────────────────
@@ -193,3 +202,73 @@ def test_download_filtered_csv(client):
     assert "age,sex,bmi,children,smoker,region,charges" in lines[0].lower()
     # Data rows: 67 smokers in northeast
     assert len(lines) == 67 + 1  # 67 rows + 1 header
+
+
+# ── 11. Empty results & null statistics ────────────────────────────────────────
+
+def test_empty_results_and_null_statistics(client):
+    """When no records match, return total_filtered 0, empty records, and null (never 0.0) statistics."""
+    # Search for an impossible combination: children=5, smoker=yes, region=northeast, age_min=60
+    res = client.get("/api/data?children=5&smoker=yes&region=northeast&age_min=60")
+    assert res.status_code == 200
+    data = res.get_json()
+
+    assert data["total_filtered"] == 0
+    assert len(data["records"]) == 0
+    assert data["page"] == 1
+    assert data["pages"] == 1
+
+    summary = data["selection_summary"]
+    assert summary["matched_records"] == 0
+    assert summary["matched_count"] == 0
+    # Must be None / null in JSON, NOT 0.0
+    assert summary["mean_charges"] is None
+    assert summary["median_charges"] is None
+    assert summary["mean_bmi"] is None
+    assert summary["average_charges"] is None
+    assert summary["average_bmi"] is None
+
+
+# ── 12. Invalid category & numeric range validation (HTTP 400) ─────────────────
+
+def test_invalid_filters_return_400(client):
+    """Query parameters with invalid categories, inverted ranges, or invalid formats must return HTTP 400."""
+    # Invalid smoker category
+    res = client.get("/api/data?smoker=sometimes")
+    assert res.status_code == 400
+    assert "Invalid smoker" in res.get_json()["message"]
+
+    # Invalid sex category
+    res = client.get("/api/data?sex=other")
+    assert res.status_code == 400
+    assert "Invalid sex" in res.get_json()["message"]
+
+    # Invalid region
+    res = client.get("/api/data?region=antarctica")
+    assert res.status_code == 400
+    assert "Invalid region" in res.get_json()["message"]
+
+    # Inverted age range (age_min > age_max)
+    res = client.get("/api/data?age_min=50&age_max=20")
+    assert res.status_code == 400
+    assert "Invalid age range" in res.get_json()["message"]
+
+    # Negative age_min
+    res = client.get("/api/data?age_min=-5")
+    assert res.status_code == 400
+    assert "age_min cannot be negative" in res.get_json()["message"]
+
+    # Non-numeric age_min
+    res = client.get("/api/data?age_min=fifty")
+    assert res.status_code == 400
+    assert "Invalid age_min" in res.get_json()["message"]
+
+    # Inverted BMI range (bmi_min > bmi_max)
+    res = client.get("/api/data?bmi_min=35.0&bmi_max=25.0")
+    assert res.status_code == 400
+    assert "Invalid BMI range" in res.get_json()["message"]
+
+    # Invalid children count
+    res = client.get("/api/data?children=many")
+    assert res.status_code == 400
+    assert "Invalid children" in res.get_json()["message"]
