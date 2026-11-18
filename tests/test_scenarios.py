@@ -322,3 +322,39 @@ def test_post_scenario_compare_400_on_invalid_input(client):
     })
     assert res3.status_code == 400
     assert "age_min" in res3.get_json()["message"]
+
+
+def test_scenario_comparison_statistical_rigor(valid_df):
+    """Scenario comparison includes baseline: scenario_a, Welch's t-statistic, and degrees of freedom."""
+    scenario_a = {"smoker": "no", "sex": "all", "region": "all"}
+    scenario_b = {"smoker": "yes", "sex": "all", "region": "all"}
+
+    result, err = compare_empirical_scenarios(valid_df, scenario_a, scenario_b)
+    assert err is None
+    comp = result["comparison"]
+
+    assert comp["baseline"] == "scenario_a"
+    assert comp["t_statistic"] is not None
+    assert comp["t_statistic"] > 30.0  # Empirical t-statistic ~32.7
+    assert comp["p_value"] is not None
+    assert comp["degrees_of_freedom"] is not None
+    assert abs(comp["degrees_of_freedom"] - 311.85) < 1.0
+
+    # Confidence intervals in cohorts
+    assert result["scenario_a"]["ci_margin"] is not None
+    assert result["scenario_b"]["ci_margin"] is not None
+    assert result["scenario_a"]["ci_low"] < result["scenario_a"]["mean"] < result["scenario_a"]["ci_high"]
+    assert result["scenario_b"]["ci_low"] < result["scenario_b"]["mean"] < result["scenario_b"]["ci_high"]
+
+
+def test_scenario_small_sample_and_empty_warnings(valid_df):
+    """Small sample size (< 20) emits high variance warning; 0 emits 0-record warning."""
+    # Cohort with n < 20
+    small_cohort = {"smoker": "yes", "age_min": 60, "age_max": 64, "region": "northeast"}
+    normal_cohort = {"smoker": "no"}
+
+    result, err = compare_empirical_scenarios(valid_df, small_cohort, normal_cohort)
+    assert err is None
+    assert any("small sample size" in w for w in result["warnings"])
+    assert result["scenario_a"]["count"] < 20
+

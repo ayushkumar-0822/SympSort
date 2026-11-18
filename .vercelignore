@@ -2,10 +2,16 @@
 .github
 .venv
 .pytest_cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
 tests
 docs
 outputs
 archive
+scratch
 *.bat
 *.ps1
 *.zip
+

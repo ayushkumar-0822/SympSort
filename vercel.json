@@ -10,15 +10,11 @@
       "destination": "/api/index?__path__=/api"
     },
     {
-      "source": "/static/(.*)",
-      "destination": "/api/index?__path__=/static/$1"
-    },
-    {
       "source": "/export-csv",
       "destination": "/api/index?__path__=/export-csv"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!static|favicon.ico).*)",
       "destination": "/api/index?__path__=/$1"
     }
   ],
@@ -27,7 +23,7 @@
   },
   "functions": {
     "api/index.py": {
-      "includeFiles": "{data,templates,static}/**"
+      "includeFiles": "data/**"
     }
   }
 }

@@ -160,7 +160,9 @@ def calculate_welch_t_test(
 
     se_diff = math.sqrt((v1 / n1) + (v2 / n2))
     if se_diff == 0.0:
-        return 0.0, 1.0, float(n1 + n2 - 2)
+        if m1 == m2:
+            return 0.0, 1.0, float(n1 + n2 - 2)
+        return None, None, None
 
     t_stat = (m2 - m1) / se_diff
 
@@ -271,6 +273,7 @@ class SmokerAnalysisResult:
 
     # ── P2 Statistical Significance Metrics ──────────────────────────────────
     t_statistic: Optional[float] = None
+    welch_df: Optional[float] = None
     t_p_value: str = "N/A"
     mann_whitney_p_value: str = "N/A"
     cohen_d: Optional[float] = None
@@ -325,6 +328,7 @@ class SmokerAnalysisResult:
             "smoker_ci_high": _clean_num(self.smoker_ci_high) or 0.0,
             "ci_method": str(self.ci_method),
             "t_statistic": _clean_num(self.t_statistic),
+            "welch_df": _clean_num(self.welch_df),
             "t_p_value": str(self.t_p_value),
             "mann_whitney_p_value": str(self.mann_whitney_p_value),
             "cohen_d": _clean_num(self.cohen_d),
@@ -453,6 +457,7 @@ def calculate_smoker_charges(df: pd.DataFrame) -> SmokerAnalysisResult:
         )
 
         result.t_statistic = t_stat
+        result.welch_df = _df
         result.t_p_value = format_p_value(t_pval)
         result.mann_whitney_p_value = format_p_value(u_pval)
         result.cohen_d = cohen_d
@@ -567,8 +572,8 @@ def _calculate_subgroup_metrics(subset: pd.DataFrame) -> dict[str, Any]:
     ci_low = mean_val
     ci_high = mean_val
     if n > 1 and std_val > 0:
-        se = std_val / (n ** 0.5)
-        t_crit = 1.96 if n >= 30 else 2.0
+        se = std_val / math.sqrt(n)
+        t_crit = student_t_critical(df=n - 1, alpha=0.05)
         ci_margin = float(t_crit * se)
         ci_low = max(0.0, mean_val - ci_margin)
         ci_high = mean_val + ci_margin
@@ -611,24 +616,18 @@ def compare_scenarios(
 
     higher = "b" if meanB > meanA else ("a" if meanA > meanB else "equal")
 
-    # Statistical significance (Welch's t-test)
+    # Statistical significance (Welch's independent-samples t-test with equal_var=False)
     t_stat = None
     p_val_text = "N/A"
-    if nA > 1 and nB > 1:
-        vA = (metrics_a["std"] ** 2) / nA
-        vB = (metrics_b["std"] ** 2) / nB
-        denom = (vA + vB) ** 0.5
-        if denom > 0:
-            t_stat = round(float((meanB - meanA) / denom), 2)
-            p_val_text = (
-                "p < 0.001"
-                if abs(t_stat) > 3.29
-                else (
-                    "p < 0.01"
-                    if abs(t_stat) > 2.58
-                    else ("p < 0.05" if abs(t_stat) > 1.96 else "p ≥ 0.05 (not significant)")
-                )
-            )
+    df_welch = None
+    if nA >= 2 and nB >= 2:
+        charges_a = cohort_a[COLUMN_CHARGES].dropna()
+        charges_b = cohort_b[COLUMN_CHARGES].dropna()
+        t_raw, p_raw, df_raw = calculate_welch_t_test(charges_a, charges_b)
+        if t_raw is not None and not math.isnan(t_raw):
+            t_stat = round(float(t_raw), 2)
+            df_welch = round(float(df_raw), 2) if df_raw is not None and not math.isnan(df_raw) else None
+            p_val_text = format_p_value(p_raw)
 
     warnings = []
     if nA == 0:
@@ -660,7 +659,9 @@ def compare_scenarios(
         "pct_diff": pct_diff,
         "multiplier": multiplier,
         "higher_cohort": higher,
+        "baseline": "cohort_a",
         "t_statistic": t_stat,
+        "degrees_of_freedom": df_welch,
         "p_value": p_val_text,
         "statement": statement,
         "warnings": warnings,

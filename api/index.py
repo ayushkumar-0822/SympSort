@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import os
 import sys
 import tempfile
 import urllib.parse
 from pathlib import Path
+
+logger = logging.getLogger("sympsort.vercel")
 
 # Add project root to sys.path so all imports resolve seamlessly in serverless
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -72,16 +75,13 @@ class VercelPathMiddleware:
 
         try:
             return self.wsgi_app(environ, start_response)
-        except Exception as exc:
-            import traceback
-            tb = traceback.format_exc()
-            sys.stderr.write(f"Vercel Serverless WSGI Error:\n{tb}\n")
-            sys.stderr.flush()
+        except Exception:
+            logger.exception("Vercel Serverless WSGI Error handling %s", environ.get("PATH_INFO"))
             start_response(
                 "500 Internal Server Error",
-                [("Content-Type", "text/plain; charset=utf-8")],
+                [("Content-Type", "application/json; charset=utf-8")],
             )
-            return [b"Internal Server Error"]
+            return [b'{"status":"error","code":500,"message":"An internal server error occurred."}']
 
 
 # Initialize Flask app and attach middleware

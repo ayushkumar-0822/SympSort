@@ -244,6 +244,20 @@
                   </table>
                 </div>
               </div>
+
+              <!-- Scenario Comparison Discovery Callout -->
+              <div class="overview-scenario-callout">
+                <div class="callout-content">
+                  <span class="callout-pill">Interactive Exploration</span>
+                  <h3 class="callout-heading">Explore Custom Cohorts &amp; Scenarios</h3>
+                  <p class="callout-text">
+                    Compare customized demographic subgroups (age, BMI, region, sex, children) side-by-side using real-time Pandas calculations with Student's t confidence intervals.
+                  </p>
+                </div>
+                <div class="callout-action">
+                  <button type="button" class="btn-text btn-primary" onclick="window.location.hash='#scenario'">Open Scenario Comparison →</button>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -317,27 +331,27 @@
               <div class="stat-significance-card" id="statSignificanceCard">
                 <div class="section-header-row">
                   <h2 class="section-heading">Is the Difference Real? (Statistical Significance)</h2>
-                  <span class="significance-pill">p &lt; 0.001</span>
+                  <span class="significance-pill" id="statSignificancePill">—</span>
                 </div>
                 <div class="stat-metrics-grid">
                   <div class="stat-metric-cell">
                     <span class="stat-metric-label">Welch's t-statistic</span>
-                    <span class="stat-metric-value font-tabular" id="statTVal">t = 32.75</span>
-                    <span class="stat-metric-sub">df ≈ 311.85, p &lt; 0.001</span>
+                    <span class="stat-metric-value font-tabular" id="statTVal">—</span>
+                    <span class="stat-metric-sub" id="statTSub">Welch independent t-test</span>
                   </div>
                   <div class="stat-metric-cell">
                     <span class="stat-metric-label">Mann–Whitney U test</span>
-                    <span class="stat-metric-value font-tabular" id="statMWVal">p &lt; 0.001</span>
+                    <span class="stat-metric-value font-tabular" id="statMWVal">—</span>
                     <span class="stat-metric-sub">Non-parametric rank test</span>
                   </div>
                   <div class="stat-metric-cell">
                     <span class="stat-metric-label">Effect Size (Cohen's d)</span>
-                    <span class="stat-metric-value font-tabular" id="statCohenVal">d = 3.16</span>
-                    <span class="stat-metric-sub">Extremely large effect (&gt; 0.8)</span>
+                    <span class="stat-metric-value font-tabular" id="statCohenVal">—</span>
+                    <span class="stat-metric-sub">Standardized mean difference</span>
                   </div>
                 </div>
                 <p class="stat-cautionary-note" id="statCautionNote">
-                  <strong>Interpretation Note:</strong> Welch's t-test and Mann–Whitney U confirm the cost disparity is statistically overwhelming (Cohen's d = 3.16). While statistically robust, this observational data demonstrates actuarial association rather than direct biological causation.
+                  <strong>Interpretation Note:</strong> Calculating comparative significance metrics…
                 </p>
               </div>
 
@@ -507,6 +521,9 @@
                   <p class="scenario-statement" id="scenStatement">
                     Select parameters above to compare empirical cohorts.
                   </p>
+                  <div style="margin-top: 0.75rem;">
+                    <button type="button" class="btn-text" id="downloadScenarioPdfBtn2" title="Download executive PDF report for this scenario comparison">Download Comparison Report</button>
+                  </div>
                   <div class="scenario-warning hidden" id="scenWarning"></div>
                 </div>
               </div>
@@ -958,6 +975,7 @@ plt.show()</code></pre>
               <div class="scenario-actions-bar">
                 <button type="button" class="btn-text btn-primary" id="scenCompareRunBtn">Compare Cohorts</button>
                 <button type="button" class="btn-text" id="scenCompareResetBtn">Reset to Default</button>
+                <button type="button" class="btn-text" id="downloadScenarioPdfBtn" title="Download executive PDF report for this scenario comparison">Download Comparison Report</button>
                 <span class="scenario-status-indicator" id="scenStatusIndicator"></span>
               </div>
 
@@ -965,12 +983,17 @@ plt.show()</code></pre>
               <div class="scenario-diff-card" id="scenDiffCard">
                 <div class="diff-header-row">
                   <div>
-                    <span class="diff-label">Empirical Difference in Means (B − A)</span>
+                    <span class="diff-label">Empirical Difference in Means (Scenario B vs Reference Baseline Scenario A)</span>
                     <div class="diff-headline">
                       <span class="diff-amount font-tabular" id="scenDiffAmount">+$23,615.96</span>
                       <span class="diff-pct-badge" id="scenDiffPctBadge">+280.0%</span>
                       <span class="higher-badge" id="scenHigherBadge">Scenario B is higher</span>
+                      <span class="diff-ref-note" id="scenRefNote">Reference baseline: Scenario A</span>
                     </div>
+                  </div>
+                  <div class="diff-stat-secondary">
+                    <span class="diff-sub-label">Welch's t-test</span>
+                    <span class="diff-sub-val font-tabular" id="scenDiffTStat">t = 32.75 (df ≈ 311.85, p &lt; 0.001)</span>
                   </div>
                 </div>
               </div>
@@ -1006,6 +1029,10 @@ plt.show()</code></pre>
                     <span class="metric-key">Standard Deviation (s)</span>
                     <span class="metric-val font-tabular" id="scenStatsAStd">$5,993.78</span>
                   </div>
+                  <div class="metric-row">
+                    <span class="metric-key">95% Confidence Interval</span>
+                    <span class="metric-val font-tabular" id="scenStatsACI">±$359.88</span>
+                  </div>
                 </div>
 
                 <!-- Metrics B -->
@@ -1030,6 +1057,10 @@ plt.show()</code></pre>
                   <div class="metric-row">
                     <span class="metric-key">Standard Deviation (s)</span>
                     <span class="metric-val font-tabular" id="scenStatsBStd">$11,541.59</span>
+                  </div>
+                  <div class="metric-row">
+                    <span class="metric-key">95% Confidence Interval</span>
+                    <span class="metric-val font-tabular" id="scenStatsBCI">±$1,372.67</span>
                   </div>
                 </div>
               </div>

@@ -502,12 +502,10 @@ def save_default_chart(data: Union[pd.DataFrame, pd.Series]) -> Optional[Path]:
     """
     try:
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        chart_path = OUTPUT_DIR / "smoker_charges_chart.png"
-        comparison_path = OUTPUT_DIR / "smoker_charges_comparison.png"
+        chart_path = OUTPUT_DIR / "smoker_charges_comparison.png"
         png_bytes = generate_chart_bytes(data, kind="bar", dark_mode=False, high_res=True)
         chart_path.write_bytes(png_bytes)
-        comparison_path.write_bytes(png_bytes)
-        logger.info("Chart saved to %s and %s", chart_path, comparison_path)
+        logger.info("Chart saved to %s", chart_path)
         return chart_path
     except Exception as exc:
         logger.error("Failed to save chart: %s", exc)

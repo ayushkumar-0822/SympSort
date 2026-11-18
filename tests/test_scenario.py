@@ -43,7 +43,7 @@ def test_compare_scenarios_smoker_vs_nonsmoker(valid_df):
     assert res["diff_mean"] > 23000
     assert res["higher_cohort"] == "b"
     assert res["t_statistic"] is not None
-    assert "p < 0.001" in res["p_value"]
+    assert "< 0.001" in res["p_value"]
     # Verify non-causal disclaimer is present
     assert "observational dataset" in res["statement"]
     assert "does not constitute an individual health risk prediction" in res["statement"]

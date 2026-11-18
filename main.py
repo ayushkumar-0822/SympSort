@@ -74,7 +74,7 @@ def _run_cli() -> None:
 
     chart_path = save_default_chart(result.df_grouped)
     if chart_path:
-        print(f"  Chart saved → {chart_path}\n")
+        print(f"  Chart saved -> {chart_path}\n")
 
 
 def _run_server() -> None:

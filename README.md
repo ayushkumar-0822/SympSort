@@ -86,17 +86,21 @@ Calculated from the authentic 1,338-record Kaggle dataset (`data/insurance.csv`)
 
 | Endpoint | Method | Description | Parameters / Payload |
 | :--- | :---: | :--- | :--- |
-| `/` | `GET` | Serves desktop single-page application | None |
-| `/report/printable` | `GET` | Clean presentation report for browser printing | None |
+| `/` | `GET` | Serves desktop single-page application shell | None |
+| `/report/printable` | `GET` | Clean presentation report for browser printing / Save PDF | None |
+| `/export-csv` | `GET` | Legacy alias for summary CSV export | None |
+| `/api` | `GET` | API directory index and endpoint documentation | None |
 | `/api/health` | `GET` | Health check & data validation status | None |
-| `/api/summary` | `GET` | Primary groupby statistics, p-values, 95% CIs | None |
-| `/api/sample` | `GET` | Top 5 representative dataset records | None |
+| `/api/summary` | `GET` | Primary groupby statistics, Welch t-test, Mann-Whitney U, Cohen's d, 95% CIs | None |
+| `/api/sample-data` | `GET` | Top 5 representative dataset audit records | None |
+| `/api/data-quality` | `GET` | Validation report, column dtypes, null counts, summary statistics | None |
 | `/api/chart` | `GET` | Dynamic PNG chart stream (150 DPI) | `kind=bar\|dist\|box\|scatter\|region\|sex\|age`, `theme=light\|dark` |
 | `/api/data` | `GET` | Filtered, sorted, paginated records | `search`, `smoker`, `sex`, `region`, `children`, `age_min`, `age_max`, `bmi_min`, `bmi_max`, `sort`, `order`, `page`, `page_size` |
-| `/api/scenario-compare` | `POST` | Two-cohort empirical comparison | JSON: `{"scenario_a": {...}, "scenario_b": {...}}` |
-| `/api/report/pdf` | `GET` | Download executive PDF report (in-memory) | None |
+| `/api/profile-match` | `GET` | Interactive demographic cohort matcher | `age`, `bmi`, `sex`, `region`, `smoker` |
+| `/api/scenario-compare` | `GET`, `POST` | Authoritative two-cohort empirical comparison with Student's t CIs & Welch's t-test | POST JSON: `{"scenario_a": {...}, "scenario_b": {...}}` or GET query params |
+| `/api/report/pdf` | `GET`, `POST` | Download executive PDF report (in-memory `io.BytesIO`) | Optional JSON / query params for Scenario A/B filters |
 | `/api/download/chart` | `GET` | Direct 300 DPI high-resolution PNG download | None |
-| `/api/download/summary` | `GET` | Download summary metrics CSV | None |
+| `/api/download/summary` | `GET` | Download summary metrics CSV with exact statistics | None |
 | `/api/download/filtered`| `GET` | Download active filtered records CSV | Inherits active explorer filter query params |
 | `/api/reload` | `POST` | Cache invalidation & CSV reload | None |
 
@@ -145,8 +149,8 @@ SympSort/
 │   └── insurance_sample.csv    # Fallback sample dataset
 ├── outputs/
 │   ├── smoker_charges_chart.png         # Pre-saved 300 DPI barplot
-│   ├── smoker_charges_comparison.png    # Pre-saved 300 DPI comparison chart
-│   └── lab_solution_barplot.png         # Output of lab_solution.py
+│   ├── lab_solution_barplot.png         # Output of lab_solution.py
+│   └── .gitkeep                         # Preserves directory in Git
 ├── tests/
 │   ├── conftest.py             # Shared pytest fixtures
 │   ├── test_analysis.py        # Unit tests for calculations, 95% CIs & metrics
@@ -165,7 +169,17 @@ SympSort/
 
 ---
 
-## 8. How to Run SympSort Locally
+## 8. Architectural Rationale: Why a No-Database Design?
+
+SympSort deliberately omits a relational database (SQLite, PostgreSQL) and ORMs (SQLAlchemy):
+1. **Dataset Nature**: The dataset is an immutable, read-only 1,338-record observational CSV (Brett Lantz / Kaggle, ~54 KB). Ingesting it into an external database table creates needless I/O friction and SQLite file locking.
+2. **Computational Velocity**: In-memory Pandas operations on 1,338 records execute in under 2 milliseconds. Vectorized operations (`df.groupby()`, quantiles, medians, Student's t confidence intervals, Welch's t-test) run at native Cython speed in memory.
+3. **Stateless Serverless Scalability**: Zero database connections means zero connection pool exhaustion and zero cold-start database latency. The application deploys effortlessly as an immutable serverless microservice on platforms like Vercel with no database hosting costs or downtime.
+4. **Maintenance & Hygiene**: Eliminates database migrations, connection strings, credential leaks, and concurrent file-lock contention.
+
+---
+
+## 9. How to Run SympSort Locally
 
 ### Method A: Running via Windows PowerShell
 

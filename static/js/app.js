@@ -20,6 +20,16 @@
 
   const NUMBER = new Intl.NumberFormat("en-US");
 
+  function escapeHtml(str) {
+    if (str == null) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
   // ── Column Definitions (Single source of truth for Table) ────────────────
   const COLUMNS = [
     { key: "age", label: "Age", align: "right", sortable: true },
@@ -135,7 +145,9 @@
     comparisonActiveKindBadge: document.getElementById("comparisonActiveKindBadge"),
     comparisonChartCaption: document.getElementById("comparisonChartCaption"),
     comparisonTakeawayText: document.getElementById("comparisonTakeawayText"),
+    statSignificancePill: document.getElementById("statSignificancePill"),
     statTVal: document.getElementById("statTVal"),
+    statTSub: document.getElementById("statTSub"),
     statMWVal: document.getElementById("statMWVal"),
     statCohenVal: document.getElementById("statCohenVal"),
     statCautionNote: document.getElementById("statCautionNote"),
@@ -187,6 +199,8 @@
 
     scenCompareRunBtn: document.getElementById("scenCompareRunBtn"),
     scenCompareResetBtn: document.getElementById("scenCompareResetBtn"),
+    downloadScenarioPdfBtn: document.getElementById("downloadScenarioPdfBtn"),
+    downloadScenarioPdfBtn2: document.getElementById("downloadScenarioPdfBtn2"),
     scenStatusIndicator: document.getElementById("scenStatusIndicator"),
     scenDiffCard: document.getElementById("scenDiffCard"),
     scenDiffAmount: document.getElementById("scenDiffAmount"),
@@ -194,16 +208,20 @@
     scenHigherBadge: document.getElementById("scenHigherBadge"),
     scenWarningBox: document.getElementById("scenWarningBox"),
     scenWarningText: document.getElementById("scenWarningText"),
+    scenDiffTStat: document.getElementById("scenDiffTStat"),
+    scenRefNote: document.getElementById("scenRefNote"),
     scenStatsACount: document.getElementById("scenStatsACount"),
     scenStatsAMean: document.getElementById("scenStatsAMean"),
     scenStatsAMedian: document.getElementById("scenStatsAMedian"),
     scenStatsARange: document.getElementById("scenStatsARange"),
     scenStatsAStd: document.getElementById("scenStatsAStd"),
+    scenStatsACI: document.getElementById("scenStatsACI"),
     scenStatsBCount: document.getElementById("scenStatsBCount"),
     scenStatsBMean: document.getElementById("scenStatsBMean"),
     scenStatsBMedian: document.getElementById("scenStatsBMedian"),
     scenStatsBRange: document.getElementById("scenStatsBRange"),
     scenStatsBStd: document.getElementById("scenStatsBStd"),
+    scenStatsBCI: document.getElementById("scenStatsBCI"),
     scenDisclaimerText: document.getElementById("scenDisclaimerText"),
 
     // Explorer
@@ -775,8 +793,16 @@
       populateStatsTable(data);
 
       // Populate P2 Statistical Significance Card
+      if (elements.statSignificancePill) {
+        elements.statSignificancePill.textContent = data.t_p_value ? `p ${data.t_p_value}` : "—";
+      }
       if (elements.statTVal) {
         elements.statTVal.textContent = typeof data.t_statistic === "number" ? `t = ${data.t_statistic.toFixed(2)}` : "t = —";
+      }
+      if (elements.statTSub) {
+        const dfStr = typeof data.welch_df === "number" ? `df ≈ ${data.welch_df.toFixed(2)}, ` : "";
+        const pStr = data.t_p_value ? `p ${data.t_p_value}` : "p = —";
+        elements.statTSub.textContent = `${dfStr}${pStr}`;
       }
       if (elements.statMWVal) {
         elements.statMWVal.textContent = data.mann_whitney_p_value ? String(data.mann_whitney_p_value) : "—";
@@ -1085,7 +1111,8 @@
       }
       loggerError("Failed to load explorer data", err);
       if (elements.explorerEmpty) elements.explorerEmpty.classList.add("hidden");
-      elements.explorerBody.innerHTML = `<tr><td colspan="${COLUMNS.length}" class="table-error"><div style="display:flex;align-items:center;justify-content:center;gap:0.75rem;padding:1rem 0;"><span>Failed to load data: ${err.message || "Connection error."}</span><button type="button" class="btn-text" id="explorerRetryBtn" style="text-decoration:underline;cursor:pointer;">Retry</button></div></td></tr>`;
+      const safeErrMsg = escapeHtml(err.message || "Connection error.");
+      elements.explorerBody.innerHTML = `<tr><td colspan="${COLUMNS.length}" class="table-error"><div style="display:flex;align-items:center;justify-content:center;gap:0.75rem;padding:1rem 0;"><span>Failed to load data: ${safeErrMsg}</span><button type="button" class="btn-text" id="explorerRetryBtn" style="text-decoration:underline;cursor:pointer;">Retry</button></div></td></tr>`;
       const retryBtn = document.getElementById("explorerRetryBtn");
       if (retryBtn) {
         retryBtn.addEventListener("click", () => loadExplorerData());
@@ -1119,7 +1146,7 @@
       .map((row) => {
         const cells = COLUMNS.map((col) => {
           const rawVal = row[col.key];
-          const formatted = col.format ? col.format(rawVal) : (rawVal ?? "—");
+          const formatted = col.format ? col.format(rawVal) : escapeHtml(rawVal ?? "—");
           const alignClass = col.align === "right" ? "num font-tabular" : "";
           return `<td class="${alignClass}">${formatted}</td>`;
         }).join("");
@@ -1447,6 +1474,7 @@
           : "—";
       }
       if (elements.scenStatsAStd) elements.scenStatsAStd.textContent = a.std !== null && a.std !== undefined ? CURRENCY.format(a.std) : "—";
+      if (elements.scenStatsACI) elements.scenStatsACI.textContent = a.ci_margin !== null && a.ci_margin !== undefined ? `±${CURRENCY.format(a.ci_margin)}` : "—";
 
       // Render Scenario B metrics
       const b = data.scenario_b || {};
@@ -1459,6 +1487,7 @@
           : "—";
       }
       if (elements.scenStatsBStd) elements.scenStatsBStd.textContent = b.std !== null && b.std !== undefined ? CURRENCY.format(b.std) : "—";
+      if (elements.scenStatsBCI) elements.scenStatsBCI.textContent = b.ci_margin !== null && b.ci_margin !== undefined ? `±${CURRENCY.format(b.ci_margin)}` : "—";
 
       // Render Comparative Difference
       const comp = data.comparison || {};
@@ -1490,6 +1519,20 @@
         } else {
           elements.scenHigherBadge.textContent = "Means are identical or undefined";
           elements.scenHigherBadge.className = "higher-badge higher-badge--equal";
+        }
+      }
+
+      if (elements.scenRefNote) {
+        elements.scenRefNote.textContent = "Reference baseline: Scenario A";
+      }
+
+      if (elements.scenDiffTStat) {
+        if (typeof comp.t_statistic === "number") {
+          const dfText = typeof comp.degrees_of_freedom === "number" ? `df ≈ ${comp.degrees_of_freedom.toFixed(2)}, ` : "";
+          const pText = typeof comp.p_value === "number" ? (comp.p_value < 0.001 ? "p < 0.001" : `p = ${comp.p_value.toFixed(3)}`) : "p = —";
+          elements.scenDiffTStat.textContent = `t = ${comp.t_statistic.toFixed(2)} (${dfText}${pText})`;
+        } else {
+          elements.scenDiffTStat.textContent = "t = — (insufficient sample size)";
         }
       }
 
@@ -1544,6 +1587,70 @@
     if (elements.scenB_children) elements.scenB_children.value = "all";
 
     runScenarioComparison();
+  }
+
+  async function downloadScenarioPdfReport(cohortMode = false) {
+    let payloadA, payloadB;
+    if (cohortMode) {
+      payloadA = {
+        age_band: elements.profileAge ? elements.profileAge.value : "all",
+        bmi_band: elements.profileBmi ? elements.profileBmi.value : "all",
+        sex: elements.profileSex ? elements.profileSex.value : "all",
+        region: elements.profileRegion ? elements.profileRegion.value : "all",
+        smoker: elements.profileSmoker ? elements.profileSmoker.value : "no",
+      };
+      const bAgeEl = document.getElementById("scenarioB_age");
+      const bBmiEl = document.getElementById("scenarioB_bmi");
+      const bSexEl = document.getElementById("scenarioB_sex");
+      const bRegionEl = document.getElementById("scenarioB_region");
+      const bSmokerEl = document.getElementById("scenarioB_smoker");
+      payloadB = {
+        age_band: bAgeEl ? bAgeEl.value : "all",
+        bmi_band: bBmiEl ? bBmiEl.value : "all",
+        sex: bSexEl ? bSexEl.value : "all",
+        region: bRegionEl ? bRegionEl.value : "all",
+        smoker: bSmokerEl ? bSmokerEl.value : "yes",
+      };
+    } else {
+      payloadA = serializeScenarioCohort("scenA");
+      payloadB = serializeScenarioCohort("scenB");
+    }
+
+    showToast("Generating scenario comparison PDF report…");
+
+    try {
+      const res = await fetch("/api/report/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scenario_a: payloadA,
+          scenario_b: payloadB,
+        }),
+      });
+
+      if (!res.ok) {
+        let errMsg = `Failed to generate PDF (${res.status})`;
+        try {
+          const errData = await res.json();
+          if (errData && errData.message) errMsg = errData.message;
+        } catch (_) {}
+        throw new Error(errMsg);
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "sympsort_scenario_comparison_report.pdf";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      showToast("Comparison report downloaded successfully.");
+    } catch (err) {
+      loggerError("Scenario PDF download error:", err);
+      showToast(`PDF download failed: ${err.message || "Unknown error"}`);
+    }
   }
 
   // ── Methodology Data Quality & Ingestion Audit ─────────────────────────
@@ -1874,6 +1981,12 @@
     }
     if (elements.scenCompareResetBtn) {
       elements.scenCompareResetBtn.addEventListener("click", resetScenarioInputs);
+    }
+    if (elements.downloadScenarioPdfBtn) {
+      elements.downloadScenarioPdfBtn.addEventListener("click", () => downloadScenarioPdfReport(false));
+    }
+    if (elements.downloadScenarioPdfBtn2) {
+      elements.downloadScenarioPdfBtn2.addEventListener("click", () => downloadScenarioPdfReport(true));
     }
 
     // Explorer smoker pills

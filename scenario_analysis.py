@@ -20,6 +20,7 @@ from typing import Any, Optional
 import pandas as pd
 
 import config
+from analysis import calculate_welch_t_test, student_t_critical
 from config import (
     COLUMN_AGE,
     COLUMN_BMI,
@@ -287,6 +288,9 @@ def calculate_cohort_metrics(subset: pd.DataFrame, applied_filters: dict[str, An
             "min": None,
             "max": None,
             "std": None,
+            "ci_margin": None,
+            "ci_low": None,
+            "ci_high": None,
             "has_data": False,
             "applied_filters": applied_filters,
         }
@@ -298,6 +302,16 @@ def calculate_cohort_metrics(subset: pd.DataFrame, applied_filters: dict[str, An
     max_val = float(charges.max())
     std_val = float(charges.std(ddof=1)) if n > 1 else None
 
+    ci_margin = None
+    ci_low = None
+    ci_high = None
+    if n > 1 and std_val is not None and std_val > 0:
+        se = std_val / math.sqrt(n)
+        t_crit = student_t_critical(df=n - 1, alpha=0.05)
+        ci_margin = round(float(t_crit * se), 2)
+        ci_low = round(max(0.0, mean_val - (t_crit * se)), 2)
+        ci_high = round(mean_val + (t_crit * se), 2)
+
     return {
         "matched_records": n,
         "count": n,
@@ -306,6 +320,9 @@ def calculate_cohort_metrics(subset: pd.DataFrame, applied_filters: dict[str, An
         "min": round(min_val, 2),
         "max": round(max_val, 2),
         "std": round(std_val, 2) if std_val is not None else None,
+        "ci_margin": ci_margin,
+        "ci_low": ci_low,
+        "ci_high": ci_high,
         "has_data": True,
         "applied_filters": applied_filters,
     }
@@ -351,13 +368,20 @@ def compare_empirical_scenarios(
         warnings.append(f"Scenario B has a small sample size (n = {nB} < 20); empirical estimates have high statistical variance.")
 
     # Difference in group means
+    diff_mean = None
+    pct_diff = None
+    multiplier = None
+    higher = None
+
     if meanA is not None and meanB is not None:
         diff_mean = round(meanB - meanA, 2)
-        # Percentage difference only if denominator (meanA) is non-zero
-        if meanA != 0:
+        # Percentage difference and multiplier relative to Scenario A as baseline
+        if meanA > 0:
             pct_diff = round((diff_mean / meanA) * 100.0, 2)
-        else:
-            pct_diff = None
+            multiplier = round(meanB / meanA, 2)
+        elif meanA < 0:
+            pct_diff = round((diff_mean / abs(meanA)) * 100.0, 2)
+            multiplier = round(meanB / meanA, 2)
 
         if meanB > meanA:
             higher = "scenario_b"
@@ -365,10 +389,19 @@ def compare_empirical_scenarios(
             higher = "scenario_a"
         else:
             higher = "equal"
-    else:
-        diff_mean = None
-        pct_diff = None
-        higher = None
+
+    # Welch's independent samples t-test between empirical cohorts (equal_var=False)
+    t_stat = None
+    p_val = None
+    df_welch = None
+    if nA >= 2 and nB >= 2:
+        charges_a = subset_a[COLUMN_CHARGES].dropna()
+        charges_b = subset_b[COLUMN_CHARGES].dropna()
+        t_raw, p_raw, df_raw = calculate_welch_t_test(charges_a, charges_b)
+        if t_raw is not None and not math.isnan(t_raw):
+            t_stat = round(float(t_raw), 2)
+            p_val = float(p_raw) if p_raw is not None and not math.isnan(p_raw) else None
+            df_welch = round(float(df_raw), 2) if df_raw is not None and not math.isnan(df_raw) else None
 
     disclaimer = (
         "Empirical subgroup comparison based on historical observational records in dataset "
@@ -381,9 +414,14 @@ def compare_empirical_scenarios(
         "scenario_a": metrics_a,
         "scenario_b": metrics_b,
         "comparison": {
+            "baseline": "scenario_a",
             "difference_mean": diff_mean,
             "percentage_difference": pct_diff,
+            "multiplier": multiplier,
             "higher_scenario": higher,
+            "t_statistic": t_stat,
+            "p_value": p_val,
+            "degrees_of_freedom": df_welch,
             "has_data": metrics_a["has_data"] and metrics_b["has_data"],
         },
         "warnings": warnings,

@@ -114,3 +114,96 @@ def test_api_download_chart_png(client):
     assert "attachment" in res.headers.get("Content-Disposition", "")
     assert res.data.startswith(b"\x89PNG\r\n\x1a\n"), "Must start with PNG signature"
     assert len(res.data) > 20000
+
+
+# ── 6. Scenario Comparison PDF downloads (POST & GET) ─────────────────────────
+
+def test_api_report_pdf_with_scenario_post(client):
+    """POST /api/report/pdf with valid scenario filters generates scenario PDF."""
+    payload = {
+        "scenario_a": {
+            "smoker": "no",
+            "sex": "all",
+            "region": "all",
+            "age_min": 18,
+            "age_max": 29,
+        },
+        "scenario_b": {
+            "smoker": "yes",
+            "sex": "all",
+            "region": "all",
+            "age_min": 18,
+            "age_max": 29,
+        },
+    }
+    res = client.post("/api/report/pdf", json=payload)
+    assert res.status_code == 200
+    assert res.content_type == "application/pdf"
+    assert "attachment" in res.headers.get("Content-Disposition", "")
+    assert "sympsort_scenario_comparison_report.pdf" in res.headers.get("Content-Disposition", "")
+    assert res.data.startswith(b"%PDF-")
+    assert len(res.data) > 10000
+
+
+def test_api_report_pdf_with_scenario_get_params(client):
+    """GET /api/report/pdf with prefixed parameters generates scenario PDF."""
+    res = client.get("/api/report/pdf?a_smoker=no&a_sex=female&b_smoker=yes&b_sex=female")
+    assert res.status_code == 200
+    assert res.content_type == "application/pdf"
+    assert "sympsort_scenario_comparison_report.pdf" in res.headers.get("Content-Disposition", "")
+    assert res.data.startswith(b"%PDF-")
+
+
+def test_api_report_pdf_with_invalid_scenario_filter_returns_400(client):
+    """Submitting invalid scenario filters returns HTTP 400 and does not leak tracebacks."""
+    # Invalid smoker option
+    payload_bad = {
+        "scenario_a": {"smoker": "sometimes"},
+        "scenario_b": {"smoker": "yes"},
+    }
+    res = client.post("/api/report/pdf", json=payload_bad)
+    assert res.status_code == 400
+    data = res.get_json()
+    assert data["status"] == "error"
+    assert "Scenario validation failed" in data["message"]
+    # Ensure traceback is not leaked
+    assert "Traceback" not in res.data.decode("utf-8")
+
+
+def test_api_report_pdf_with_inverted_age_returns_400(client):
+    """Inverted age range in scenario returns HTTP 400."""
+    payload_bad = {
+        "scenario_a": {"age_min": 50, "age_max": 20},
+        "scenario_b": {"age_min": 20, "age_max": 50},
+    }
+    res = client.post("/api/report/pdf", json=payload_bad)
+    assert res.status_code == 400
+    assert "cannot exceed" in res.get_json()["message"]
+
+
+def test_api_report_pdf_missing_one_scenario_returns_400(client):
+    """Submitting only scenario_a without scenario_b returns HTTP 400."""
+    res = client.post("/api/report/pdf", json={"scenario_a": {"smoker": "no"}})
+    assert res.status_code == 400
+    assert "both 'scenario_a' and 'scenario_b' must be provided" in res.get_json()["message"]
+
+
+def test_generate_pdf_report_with_scenario_result(valid_df):
+    """generate_pdf_report directly with scenario_result produces valid PDF bytes."""
+    from analysis import calculate_smoker_charges
+    from scenario_analysis import compare_empirical_scenarios
+
+    analysis = calculate_smoker_charges(valid_df)
+    scen_result, err = compare_empirical_scenarios(
+        valid_df,
+        {"smoker": "no", "age_min": 30, "age_max": 50},
+        {"smoker": "yes", "age_min": 30, "age_max": 50},
+    )
+    assert err is None
+    assert scen_result is not None
+
+    pdf_bytes = generate_pdf_report(valid_df, analysis, scenario_result=scen_result)
+    assert isinstance(pdf_bytes, bytes)
+    assert pdf_bytes.startswith(b"%PDF-")
+    assert len(pdf_bytes) > 10000
+

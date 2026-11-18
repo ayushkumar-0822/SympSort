@@ -18,13 +18,13 @@
 | Layer | Component | Version | Purpose |
 |---|---|---|---|
 | **Data Ingestion** | Python / Pandas | 3.13 / >=2.0.0 | CSV parsing, error coercion, column normalization |
-| **Statistical Engine**| Pandas | >=2.0.0 | `df.groupby('smoker')['charges'].mean()`, Welch's t-test, Mann-Whitney U |
+| **Statistical Engine**| Pandas / SciPy | >=2.0.0 / >=1.10.0 | `df.groupby('smoker')['charges'].mean()`, Welch's t-test, Mann-Whitney U, Cohen's d |
 | **Scenario Engine**| Python / Pandas | >=2.0.0 | Two-group empirical cohort comparison with strict range validation |
 | **Reporting Engine**| ReportLab | >=4.0.0 | In-memory publication-grade PDF generation (`io.BytesIO`) |
 | **Visualization** | Seaborn / Matplotlib | >=0.12.0 / >=3.7.0 | `sns.barplot` (and 6 additional chart views) with 95% CI error bars |
 | **Backend Web Server**| Flask | >=3.0.0 | REST JSON APIs, relative-route asset serving, dynamic PNG streaming |
 | **Frontend UI** | HTML5 / CSS3 / Vanilla JS | ES6+ | SPA with 6 client views, hash routing, zero CDN dependencies |
-| **Automated Testing** | Pytest | >=7.0.0 | 81 unit & integration tests covering loader, analysis, scenarios, explorer, reporting |
+| **Automated Testing** | Pytest | >=7.0.0 | 96 unit & integration tests covering loader, analysis, scenarios, explorer, reporting |
 
 ---
 
@@ -34,14 +34,15 @@ SympSort/
 ├── config.py              # Central constants, file paths, palettes, chart DPI settings
 ├── data_loader.py         # CSV loading, validation, cleaning, and ValidationReport
 ├── analysis.py            # Pandas groupby computation, moments, SmokerAnalysisResult, Welch t, Cohen's d
-├── scenario_analysis.py   # Two-group empirical cohort comparison engine with strict validation
+├── scenario_analysis.py   # Authoritative empirical cohort comparison engine with strict validation
 ├── reporting.py           # In-memory ReportLab executive PDF generator (zero disk writes)
 ├── visualization.py       # 7-kind Seaborn/Matplotlib chart engine (Light/Dark themes), PNG byte generation
 ├── app.py                 # Flask factory (create_app), REST endpoints, production error handling
 ├── main.py                # Application entrypoint: CLI runner (--cli) and desktop server runner
+├── sympsort.py            # CLI and runner alias for `python sympsort.py`
 ├── api/
 │   └── index.py           # Vercel serverless WSGI entrypoint with path-rewriting middleware
-├── requirements.txt       # Pinned dependencies
+├── requirements.txt       # Pinned production runtime dependencies
 ├── pytest.ini             # Test runner configuration
 ├── run.bat / run.ps1      # Native OS launchers
 ├── ARCHITECTURE.md        # Master architectural and implementation specification
@@ -49,10 +50,12 @@ SympSort/
 ├── SCHEMA.md              # JSON and dataset schema specifications
 ├── data/
 │   ├── insurance.csv      # Real Kaggle dataset (1,338 rows)
-│   └── insurance_sample.csv # 50-row fallback fixture
+│   ├── insurance_sample.csv # 50-row fallback fixture
+│   └── .gitkeep           # Directory placeholder
 ├── outputs/
-│   ├── smoker_charges_comparison.png # 300 DPI high-resolution export
-│   └── smoker_charges_chart.png      # 300 DPI barplot export
+│   ├── smoker_charges_chart.png # 300 DPI high-resolution export
+│   ├── lab_solution_barplot.png # 25-line lab solution plot export
+│   └── .gitkeep           # Preserves directory structure in Git
 ├── templates/
 │   ├── index.html         # Single-page application shell (6 distinct views)
 │   └── report_printable.html # Presentation-grade printable executive report for PDF export
@@ -63,8 +66,9 @@ SympSort/
 │   │   └── app.js         # Client router, table renderer, scenario comparison engine
 │   ├── fonts/             # Self-hosted Source Serif 4 (Roman and Italic WOFF2)
 │   └── img/
-│       ├── logo.png       # Project emblem
-│       └── favicon.png    # High-res favicon
+│       ├── logo.png       # Authoritative project emblem
+│       ├── favicon.png    # High-res favicon PNG
+│       └── favicon.ico    # Favicon ICO
 └── tests/
     ├── conftest.py        # Shared pytest fixtures (mock DataFrames, Flask test client)
     ├── test_analysis.py   # Unit tests for Pandas grouped mean calculations and statistics
@@ -123,7 +127,7 @@ A deliberate architectural choice in SympSort is the **complete absence of a rel
 
 ---
 
-## 5. Mathematical Formulations & Exact Formulas
+## 6. Mathematical Formulations & Exact Inferential Formulas
 1. **Arithmetic Mean:**
    $$\bar{X}_{\text{smoker}} = \frac{1}{n_s} \sum_{i \in \text{smoker}} X_i = \$32,050.23 \quad (n_s = 274)$$
    $$\bar{X}_{\text{non-smoker}} = \frac{1}{n_{ns}} \sum_{j \in \text{non-smoker}} X_j = \$8,434.27 \quad (n_{ns} = 1,064)$$
@@ -137,9 +141,27 @@ A deliberate architectural choice in SympSort is the **complete absence of a rel
 4. **Relative Multiplier:**
    $$\text{Multiplier} = \frac{\bar{X}_{\text{smoker}}}{\bar{X}_{\text{non-smoker}}} \approx 3.80\times$$
 
+5. **Welch's Independent-Samples t-test (Equal Variance Not Assumed):**
+   $$t = \frac{\bar{X}_{\text{smoker}} - \bar{X}_{\text{non-smoker}}}{\sqrt{\frac{s_1^2}{n_1} + \frac{s_2^2}{n_2}}} \approx 32.75, \quad p < 0.001$$
+   $$\text{df}_{\text{Welch}} = \frac{\left( \frac{s_1^2}{n_1} + \frac{s_2^2}{n_2} \right)^2}{\frac{(s_1^2 / n_1)^2}{n_1 - 1} + \frac{(s_2^2 / n_2)^2}{n_2 - 1}} \approx 311.85$$
+
+6. **Cohen's d (Standardized Effect Size):**
+   $$s_p = \sqrt{\frac{(n_1 - 1)s_1^2 + (n_2 - 1)s_2^2}{n_1 + n_2 - 2}}, \quad d = \frac{\bar{X}_{\text{smoker}} - \bar{X}_{\text{non-smoker}}}{s_p} \approx 3.16$$
+
+7. **Student's t Confidence Intervals (df = n - 1):**
+   $$\text{CI}_{95\%} = \bar{X} \pm t_{0.975, \, n-1} \cdot \left( \frac{s}{\sqrt{n}} \right)$$
+
 ---
 
-## 6. Frontend Design Tokens & Architecture
+## 7. In-Memory ReportLab PDF Generation Architecture
+In serverless environments (e.g., Vercel AWS Lambda functions), writing permanent files to disk introduces concurrency collision risks and ephemeral storage exhaustion. `reporting.py` utilizes `io.BytesIO`:
+1. Compiles ReportLab flowable elements (Project title, Kaggle dataset source, data validation metrics, Pandas groupby methodology, summary comparison table with exact Student's t 95% CIs, embedded 300 DPI Seaborn chart, and observational limitations).
+2. Supports dynamic Scenario Comparison inclusion when optional Scenario A/B filter parameters are submitted.
+3. Streams bytes directly to the HTTP response with `mimetype="application/pdf"` and `Content-Disposition: attachment`. Zero files are written or retained on the server.
+
+---
+
+## 8. Frontend Design Tokens & Architecture
 - **Editorial Aesthetic:** Calm, restrained, paper-like report styling. Avoids glassmorphism, background blur, and neon gradients.
 - **Light Theme (Default):**
   - Page Background: `#FAF8F4` (warm ivory)
@@ -162,7 +184,7 @@ A deliberate architectural choice in SympSort is the **complete absence of a rel
 
 ---
 
-## 7. Viva Q&A Cheat Sheet (For Examiner Defense)
+## 9. Viva Q&A Cheat Sheet (For Examiner Defense)
 1. **Q: Why use `df.groupby('smoker')['charges'].mean()` instead of a loop?**
    *A:* Pandas vectorization executes in optimized C/Cython via contiguous memory arrays, running orders of magnitude faster and producing cleaner, declarative code.
 2. **Q: Why are charges for smokers skewed?**

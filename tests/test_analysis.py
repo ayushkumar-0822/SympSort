@@ -169,3 +169,94 @@ def test_cohen_d_undefined_on_constant_variance():
     d = calculate_cohen_d(10.0, 20.0, 0.0, 0.0, 5, 5)
     assert d is None
 
+
+# ── 13. Statistical rigor and mathematical validity tests ─────────────────────
+
+def test_welch_t_test_against_scipy():
+    """calculate_welch_t_test must match scipy.stats.ttest_ind(equal_var=False) exactly."""
+    import scipy.stats as stats
+    from analysis import calculate_welch_t_test
+
+    s1 = pd.Series([100.0, 150.0, 120.0, 130.0, 180.0])
+    s2 = pd.Series([300.0, 420.0, 390.0, 450.0, 500.0, 480.0])
+
+    t_stat, p_val, df = calculate_welch_t_test(s1, s2)
+    expected = stats.ttest_ind(s2, s1, equal_var=False)
+
+    assert t_stat is not None
+    assert p_val is not None
+    assert abs(t_stat - expected.statistic) < 1e-4
+    assert abs(p_val - expected.pvalue) < 1e-4
+
+
+def test_mann_whitney_u_against_scipy():
+    """calculate_mann_whitney_u must match scipy.stats.mannwhitneyu(alternative='two-sided')."""
+    import scipy.stats as stats
+    from analysis import calculate_mann_whitney_u
+
+    s1 = pd.Series([10.0, 15.0, 12.0, 14.0, 18.0])
+    s2 = pd.Series([30.0, 42.0, 39.0, 45.0, 50.0])
+
+    u_stat, p_val = calculate_mann_whitney_u(s1, s2)
+    expected = stats.mannwhitneyu(s2, s1, alternative="two-sided")
+
+    assert u_stat is not None
+    assert p_val is not None
+    assert abs(u_stat - expected.statistic) < 1e-4
+    assert abs(p_val - expected.pvalue) < 1e-4
+
+
+def test_welch_t_test_edge_cases():
+    """calculate_welch_t_test handles n < 2, constant values, and zero variance cleanly."""
+    from analysis import calculate_welch_t_test
+
+    # Sample size < 2
+    t, p, df = calculate_welch_t_test(pd.Series([10.0]), pd.Series([20.0, 30.0]))
+    assert t is None and p is None and df is None
+
+    # Both constant with identical means
+    t, p, df = calculate_welch_t_test(pd.Series([5.0, 5.0, 5.0]), pd.Series([5.0, 5.0]))
+    assert t == 0.0
+    assert p == 1.0
+
+    # Both constant with different means (standard error = 0, mathematically undefined)
+    t, p, df = calculate_welch_t_test(pd.Series([5.0, 5.0, 5.0]), pd.Series([10.0, 10.0]))
+    assert t is None and p is None and df is None
+
+
+def test_student_t_critical_exact_values():
+    """student_t_critical returns exact Student's t quantiles, never a fixed 1.96 for small n."""
+    import scipy.stats as stats
+    from analysis import student_t_critical
+
+    for df in [1, 2, 5, 10, 29, 30, 100, 1000]:
+        val = student_t_critical(df=df, alpha=0.05)
+        expected = float(stats.t.ppf(0.975, df=df))
+        assert abs(val - expected) < 1e-2, f"Discrepancy at df={df}: got {val}, expected {expected}"
+
+    # For small n (e.g. df=1), value is ≈ 12.71, NOT 1.96!
+    assert student_t_critical(df=1, alpha=0.05) > 12.0
+    assert student_t_critical(df=2, alpha=0.05) > 4.0
+
+
+def test_cohen_d_formula_exactness():
+    """calculate_cohen_d computes pooled standard deviation correctly."""
+    import math
+    from analysis import calculate_cohen_d
+
+    m1, m2 = 100.0, 150.0
+    s1, s2 = 15.0, 20.0
+    n1, n2 = 10, 15
+
+    # Manual pooled variance
+    pooled_var = (((n1 - 1) * (s1 ** 2)) + ((n2 - 1) * (s2 ** 2))) / (n1 + n2 - 2)
+    expected_d = abs(m2 - m1) / math.sqrt(pooled_var)
+
+    d = calculate_cohen_d(m1, m2, s1, s2, n1, n2)
+    assert d is not None
+    assert abs(d - expected_d) < 1e-5
+
+    # Edge cases: n1 + n2 <= 2
+    assert calculate_cohen_d(m1, m2, s1, s2, 1, 1) is None
+
+

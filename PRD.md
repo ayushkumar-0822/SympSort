@@ -44,16 +44,21 @@
 
 ### FR-5: Backend API Endpoints
 - `GET /`: Serves desktop SPA.
+- `GET /report/printable`: Presentation-grade printable executive report for browser printing / Save as PDF.
+- `GET /api`: JSON API index and endpoint documentation.
 - `GET /api/health`: JSON health check `{"status": "ok", "rows": 1338}`.
-- `GET /api/summary`: JSON statistical metrics, validation counts, and live `groupby_text`.
+- `GET /api/summary`: JSON statistical metrics, Welch's t-test, Mann-Whitney U, Cohen's d, validation counts, and live `groupby_text`.
 - `GET /api/chart`: Dynamic PNG stream (150 DPI screen) supporting 7 analytical views.
 - `GET /api/data`: Filtered, sorted, and paginated records with JSON numbers and full selection summary.
-- `POST /api/reload`: Invalidates cache, reloads CSV, returns `{"status": "success", "rows": N}`.
-- `POST /api/scenario-compare`: Two-group empirical cohort comparison with strict range validation.
-- `GET /api/report/pdf`: Direct in-memory executive PDF download.
+- `GET /api/sample-data`: Top 5 representative sample records for instant audit.
+- `GET /api/data-quality`: Data validation audit, dtypes, null counts, and describe statistics.
+- `GET /api/profile-match`: Interactive demographic profile matcher.
+- `GET, POST /api/scenario-compare`: Authoritative two-group empirical cohort comparison with Student's t CIs and Welch's t-test.
+- `GET, POST /api/report/pdf`: Direct in-memory executive PDF download (io.BytesIO) with optional Scenario A/B parameter support.
 - `GET /api/download/chart`: Direct 300 DPI high-resolution attachment.
-- `GET /api/download/summary`: CSV summary export.
+- `GET /api/download/summary` (`/export-csv`): Dynamic summary metrics CSV export.
 - `GET /api/download/filtered`: Active filtered records CSV export.
+- `POST /api/reload`: Invalidates cache, reloads CSV, returns `{"status": "success", "rows": N}`.
 
 ### FR-6: Scenario Comparison Engine (View 6)
 - Allows two customized empirical cohorts (Scenario A vs Scenario B) across 6 filter dimensions (smoker, sex, region, age min/max, BMI min/max, children).

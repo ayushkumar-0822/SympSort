@@ -392,24 +392,87 @@ def create_app() -> Flask:
             download_name=f"sympsort_{kind}_chart.png",
         )
 
-    @app.route("/api/report/pdf")
+    @app.route("/api/report/pdf", methods=["GET", "POST"])
     def api_report_pdf():
-        """Generate and stream publication-grade in-memory executive PDF report."""
+        """Generate and stream publication-grade in-memory executive PDF report.
+        
+        Supports standard report and optional custom Scenario A / Scenario B comparison.
+        Filters can be passed via GET query parameters (a_smoker, b_smoker, etc. or JSON query)
+        or via POST JSON body with 'scenario_a' and 'scenario_b'.
+        Filters are strictly validated and recalculated dynamically against the clean dataset.
+        """
         df, analysis, report = get_data()
         if df is None or df.empty:
             return jsonify({"status": "error", "message": "No valid data available to generate report"}), 400
 
+        scenario_result = None
+
+        # Check for scenario filters in POST or GET
+        has_scenario = False
+        scen_a_raw: dict[str, Any] = {}
+        scen_b_raw: dict[str, Any] = {}
+
+        if request.method == "POST":
+            payload = request.get_json(silent=True)
+            if isinstance(payload, dict) and ("scenario_a" in payload or "scenario_b" in payload):
+                if "scenario_a" not in payload or "scenario_b" not in payload:
+                    return jsonify({
+                        "status": "error",
+                        "message": "When submitting scenarios, both 'scenario_a' and 'scenario_b' must be provided.",
+                    }), 400
+                scen_a_raw = payload.get("scenario_a") or {}
+                scen_b_raw = payload.get("scenario_b") or {}
+                has_scenario = True
+        else:
+            # GET method
+            # Case 1: JSON-encoded scenario_a and scenario_b parameters
+            if "scenario_a" in request.args or "scenario_b" in request.args:
+                if "scenario_a" not in request.args or "scenario_b" not in request.args:
+                    return jsonify({
+                        "status": "error",
+                        "message": "When submitting scenarios via query parameters, both 'scenario_a' and 'scenario_b' must be provided.",
+                    }), 400
+                import json
+                try:
+                    scen_a_raw = json.loads(request.args.get("scenario_a", "{}"))
+                    scen_b_raw = json.loads(request.args.get("scenario_b", "{}"))
+                except Exception:
+                    return jsonify({
+                        "status": "error",
+                        "message": "Invalid JSON in scenario_a or scenario_b query parameter.",
+                    }), 400
+                has_scenario = True
+            # Case 2: Individual query parameters prefixed with a_ and b_
+            elif any(k.startswith("a_") for k in request.args) or any(k.startswith("b_") for k in request.args):
+                for k, v in request.args.items():
+                    if k.startswith("a_"):
+                        scen_a_raw[k[2:]] = v
+                    elif k.startswith("b_"):
+                        scen_b_raw[k[2:]] = v
+                has_scenario = True
+
+        if has_scenario:
+            result, err = compare_empirical_scenarios(df, scen_a_raw, scen_b_raw)
+            if err:
+                return jsonify({
+                    "status": "error",
+                    "message": f"Scenario validation failed: {err}",
+                }), 400
+            scenario_result = result
+
         try:
-            pdf_bytes = generate_pdf_report(df, analysis, report)
+            pdf_bytes = generate_pdf_report(df, analysis, report, scenario_result=scenario_result)
         except Exception as exc:
             logger.error("Error generating PDF report: %s", exc)
-            return jsonify({"status": "error", "message": f"Failed to generate PDF: {exc}"}), 500
+            return jsonify({"status": "error", "message": "Failed to generate PDF report. Please check server logs."}), 500
+
+        filename = "sympsort_scenario_comparison_report.pdf" if scenario_result else "sympsort_executive_report.pdf"
 
         return Response(
             pdf_bytes,
             mimetype="application/pdf",
             headers={
-                "Content-Disposition": "attachment; filename=sympsort_executive_report.pdf",
+                "Content-Disposition": f"attachment; filename={filename}",
                 "Content-Length": str(len(pdf_bytes)),
             },
         )
@@ -634,13 +697,19 @@ def create_app() -> Flask:
             if k not in ("academic_disclaimer", "groupby_text"):
                 writer.writerow([k, v])
 
-        # Add statistical significance metadata & non-causal disclaimer
-        writer.writerow(["t_statistic", 32.75])
-        writer.writerow(["t_p_value", "< 0.001"])
-        writer.writerow(["degrees_of_freedom", 311.85])
-        writer.writerow(["cohens_d", 3.16])
-        writer.writerow(["non_smoker_ci_95", "±$359.88"])
-        writer.writerow(["smoker_ci_95", "±$1,368.53"])
+        # Add statistical significance metadata & non-causal disclaimer dynamically
+        t_stat_val = f"{analysis.t_statistic:.2f}" if analysis.t_statistic is not None else "N/A"
+        welch_df_val = f"{analysis.welch_df:.2f}" if getattr(analysis, "welch_df", None) is not None else "N/A"
+        cohen_d_val = f"{analysis.cohen_d:.2f}" if analysis.cohen_d is not None else "N/A"
+        ns_ci_val = f"±${analysis.non_smoker_ci_margin:,.2f}" if getattr(analysis, "non_smoker_ci_margin", None) is not None else "N/A"
+        sm_ci_val = f"±${analysis.smoker_ci_margin:,.2f}" if getattr(analysis, "smoker_ci_margin", None) is not None else "N/A"
+
+        writer.writerow(["t_statistic", t_stat_val])
+        writer.writerow(["t_p_value", analysis.t_p_value])
+        writer.writerow(["degrees_of_freedom", welch_df_val])
+        writer.writerow(["cohens_d", cohen_d_val])
+        writer.writerow(["non_smoker_ci_95", ns_ci_val])
+        writer.writerow(["smoker_ci_95", sm_ci_val])
         writer.writerow(["methodology_note", "Cross-sectional observational dataset (n=1,338). Association does not imply causation."])
 
         buf.seek(0)
